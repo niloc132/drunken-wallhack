@@ -13,25 +13,62 @@ public class ByteSplittable implements Splittable {
   private static final ByteBuffer TRUE = ByteBuffer.wrap("true".getBytes());
 //  private static final ByteBuffer NULL = ByteBuffer.wrap("null".getBytes());
 
-  private static final int STAY = 0x0;       //xx00 means same depth
-  private static final int END = 0x1;        //xx01 means decr depth
-  private static final int START_OBJ = 0x2;  //001x means incr depth
-  private static final int START_ARRAY = START_OBJ;//hmm, bits aren't right, use 0x2 for now
+  private static final int TYPE_BITS = 3;
+  private static final int MASK = 0x7;
+  private static final int PARENT = 0x4;//also mask for primitive vs parent
+//  private static final int OBJ_MASK = 0x6;//skip the start/end bit
+  private static final int END_MASK = 0x1;
 
-  private static final int NULL = 0x0 << 2;   //000x could be null or obj or array
-  private static final int STRING = 0x1 <<2;  //010x means string
-  private static final int NUMBER = 0x2 << 2; //100x means number
-  private static final int BOOLEAN = 0x3 << 2;//110x means boolean
+  private static final int NULL = 0x0;
+  private static final int STRING = 0x1;
+  private static final int NUMBER = 0x2;
+  private static final int BOOLEAN = 0x3;
 
 
+  private static final int OBJECT_START = PARENT + 0x0;//with OBJ_MASK checks if is object
+  private static final int OBJECT_END = PARENT + END_MASK;
+  private static final int ARRAY_START = PARENT + 0x2;//with OBJ_MASK checks if is array
+  private static final int ARRAY_END = PARENT + 0x2 + END_MASK;
+
+  private static boolean isPrimitive(int offset) {
+    return (offset & PARENT) == 0;
+  }
+  private static boolean isString(int offset) {
+    assert isPrimitive(offset);
+    return (offset & MASK) == STRING;
+  }
+  private static boolean isNumber(int offset) {
+    assert isPrimitive(offset);
+    return (offset & MASK) == NUMBER;
+  }
+  private static boolean isBoolean(int offset) {
+    assert isPrimitive(offset);
+    return (offset & MASK) == BOOLEAN;
+  }
+
+  private static boolean isObject(int offset) {
+    assert !isPrimitive(offset);
+    return (offset & MASK) == OBJECT_START;
+  }
+  private static boolean isArray(int offset) {
+    assert !isPrimitive(offset);
+    return (offset & MASK) == ARRAY_START;
+  }
+  private static boolean isEnd(int offset) {
+    assert !isPrimitive(offset);
+    return (offset & END_MASK) == END_MASK;
+  }
+
+
+
+  @SuppressWarnings("PointlessArithmeticExpression")
   private static IntBuffer collectOffsets(ByteBuffer buffer) {
     IntBuffer offsets = IntBuffer.allocate(buffer.limit() / 2 + 1);
 
-    int nextPos = STAY;
     int lastOffset;
     consumeWhitespace(buffer);
     while(buffer.hasRemaining()) {
-      int position = buffer.position();
+      int position = buffer.position() << TYPE_BITS;
       byte token = buffer.get();
       switch (token) {
         case ':':
@@ -39,33 +76,35 @@ public class ByteSplittable implements Splittable {
           //TODO treat each pair as a pair? nothing special?
           break;
         case '{':
-          offsets.put(lastOffset = (position << 4) + (nextPos == END ? STAY : START_OBJ));
+          offsets.put(lastOffset = position + OBJECT_START);
           consumeWhitespace(buffer);
           continue;
         case '[':
-          offsets.put(lastOffset = (position << 4) + (nextPos == END ? STAY : START_ARRAY));
+          offsets.put(lastOffset = position + ARRAY_START);
           consumeWhitespace(buffer);
           continue;
         case '}':
-        case ']':
+          offsets.put(lastOffset = position + OBJECT_END);
           consumeCommaAndWhitespace(buffer);
-          nextPos = END;
+          continue;
+        case ']':
+          offsets.put(lastOffset = position + ARRAY_END);
+          consumeCommaAndWhitespace(buffer);
           continue;
         case '"':
-          //add 1 for open quote
-          offsets.put(lastOffset = (position << 4) + nextPos + STRING);
+          offsets.put(lastOffset = position + STRING);
           consumeString(buffer);
           break;
         case 'n':
-          offsets.put(lastOffset = (position << 4) + nextPos + NULL);
+          offsets.put(lastOffset = position + NULL);
           consume(buffer, "ull");
           break;
         case 't':
-          offsets.put(lastOffset = (position << 4) + nextPos + BOOLEAN);
+          offsets.put(lastOffset = position + BOOLEAN);
           consume(buffer, "rue");
           break;
         case 'f':
-          offsets.put(lastOffset = (position << 4) + nextPos + BOOLEAN);
+          offsets.put(lastOffset = position + BOOLEAN);
           consume(buffer, "alse");
           break;
         case '-':
@@ -79,13 +118,12 @@ public class ByteSplittable implements Splittable {
         case '7':
         case '8':
         case '9':
-          offsets.put(lastOffset = (position << 4) + nextPos + NUMBER);
+          offsets.put(lastOffset = position + NUMBER);
           consumeNumber(buffer);
           break;
         default:
           assert false : "Unexpected " + Character.getName(token);
       }
-      nextPos = STAY;
       consumeCommaOrColonAndWhitespace(buffer);
     }
 
@@ -239,7 +277,7 @@ public class ByteSplittable implements Splittable {
 
   private final ByteBuffer buffer;
   private final IntBuffer offsets;
-  private final Map<String, Object> reified = new HashMap<String, Object>();
+  private final Map<String, Object> reified = new HashMap<>();
 
   public ByteSplittable(ByteBuffer buffer) {
     this(buffer, collectOffsets(buffer));
@@ -314,11 +352,14 @@ public class ByteSplittable implements Splittable {
     while (offsets.hasRemaining()) {
       int next = offsets.get();
       //check if we are ending the previous object, and adjust depth
-      if ((next & END) == END) {
-        depth--;
-        if (depth < 0) {
-          offsets.reset();
-          return null;
+      if (!isPrimitive(next)) {
+        if (isEnd(next)) {
+          depth--;
+          if (depth < 0) {
+            offsets.reset();
+            return null;
+          }
+          continue;
         }
       }
       //if we're at depth 0, see if we've got the right index
@@ -329,7 +370,8 @@ public class ByteSplittable implements Splittable {
         i++;
       }
       //finally, if we are the start to a new layer, increase depth
-      if ((next & START_OBJ) == START_OBJ || (next & START_ARRAY) == START_ARRAY) {
+      if (!isPrimitive(next) && !isEnd(next)) {
+        // if we are the start to a new layer, increase depth
         depth++;
       }
     }
@@ -348,15 +390,18 @@ public class ByteSplittable implements Splittable {
     int i = 0;
     while (offsets.hasRemaining()) {
       int next = offsets.get();
-      if ((next & START_OBJ) == START_OBJ || (next & START_ARRAY) == START_ARRAY) {
-        depth++;
-      } else if ((next & END) == END) {
-        depth--;
+      if (!isPrimitive(next)) {
+        if (isEnd(next)) {
+          depth++;
+        } else if (isEnd(next)) {
+          depth--;
+          continue;
+        }
       }
       if (depth == 0) {
 
         //even numbered entries are keys
-        if (i % 2 == 0 && (next & STRING) == STRING && matches(buffer, (next >> 4) + 1, key, true)) {
+        if (i % 2 == 0 && isString(next) && matches(buffer, (next >> TYPE_BITS) + 1, key, true)) {
           //advance one more to the value
           offsets.get();
           break;
@@ -411,7 +456,7 @@ public class ByteSplittable implements Splittable {
 
   @Override
   public boolean isBoolean() {
-    return buffer.get(getFirstIndex()) == 't' || buffer.get(getFirstIndex()) == 'f';
+    return isBoolean(getFirstTypeDetails());
   }
 
   @Override
@@ -436,9 +481,7 @@ public class ByteSplittable implements Splittable {
 
   @Override
   public boolean isNumber() {
-    byte first = buffer.get(getFirstIndex());
-
-    return (first >= '0' && first <= '9') || first == '-';
+    return isNumber(getFirstTypeDetails());
   }
 
   @Override
@@ -448,7 +491,7 @@ public class ByteSplittable implements Splittable {
 
   @Override
   public boolean isString() {
-    return buffer.get(getFirstIndex()) == '"';
+    return isString(getFirstTypeDetails());
   }
 
   @Override
@@ -473,7 +516,11 @@ public class ByteSplittable implements Splittable {
 
 
   private int getFirstIndex() {
-    return offsets.get(offsets.position() - 1) >> 4;
+    return offsets.get(offsets.position() - 1) >> TYPE_BITS;
+  }
+
+  private int getFirstTypeDetails() {
+    return offsets.get(offsets.position() - 1);
   }
 
 }

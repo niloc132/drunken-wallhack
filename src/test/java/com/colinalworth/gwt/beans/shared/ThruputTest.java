@@ -56,7 +56,7 @@ public class ThruputTest {
         long start = System.currentTimeMillis();
         ByteSplittable splittable = new ByteSplittable(bb);
         guids.add(splittable.get("guid").asString());
-//        guids.add(splittable.get("items").get(4).get("guid").asString());
+        guids.add(splittable.get("items").get(4).get("guid").asString());
         time += System.currentTimeMillis() - start;
       }
     }
@@ -93,7 +93,7 @@ public class ThruputTest {
         long start = System.currentTimeMillis();
         JsonElement outer = gson.parse(new InputStreamReader(new ByteArrayInputStream(ba)));
         guids.add(outer.getAsJsonObject().get("guid").getAsString());
-//        guids.add(outer.getAsJsonObject().get("items").getAsJsonArray().get(4).getAsJsonObject().get("guid").getAsString());
+        guids.add(outer.getAsJsonObject().get("items").getAsJsonArray().get(4).getAsJsonObject().get("guid").getAsString());
         time += System.currentTimeMillis() - start;
       }
     }
