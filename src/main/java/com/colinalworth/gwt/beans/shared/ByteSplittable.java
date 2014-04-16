@@ -59,52 +59,108 @@ public class ByteSplittable implements Splittable {
     return (offset & END_MASK) == END_MASK;
   }
 
+  private static class OffsetCollector {
+    private final ByteBuffer buffer;
+    private final IntBuffer offsets;
 
+    private OffsetCollector(ByteBuffer buffer) {
+      this.buffer = buffer;
+      this.offsets = IntBuffer.allocate(buffer.limit() / 2 + 1);
+    }
 
-  @SuppressWarnings("PointlessArithmeticExpression")
-  private static IntBuffer collectOffsets(ByteBuffer buffer) {
-    IntBuffer offsets = IntBuffer.allocate(buffer.limit() / 2 + 1);
+    private IntBuffer getOffsets() {
+      return offsets;
+    }
 
-    int lastOffset;
-    consumeWhitespace(buffer);
-    while(buffer.hasRemaining()) {
+    public void collect() {
+      consumeWhitespace(buffer);
+
+      collectValue();
+
+      buffer.rewind();
+      offsets.flip();
+      offsets.get();
+    }
+
+    private void collectPairs() {
+      byte peek = buffer.get(buffer.position());
+      if (peek == '}') {
+        offsets.put((buffer.position() << TYPE_BITS) + OBJECT_END);
+        buffer.get();
+        consumeWhitespace(buffer);
+        return;
+      }
+      while (buffer.hasRemaining()) {
+        peek = buffer.get(buffer.position());
+        switch (peek) {//TODO drop switch when we consume a string
+          case '"':
+            collectValue();//string - TODO consume offset, but dont push to offsets
+            consumeColonAndWhitespace(buffer);
+            collectValue();//value - TODO consume type, and combine with offset above
+            consumeWhitespace(buffer);
+            //either comma or }
+            if (!consumeWhitespaceAndOptionalComma(buffer)) {
+              offsets.put((buffer.position() << TYPE_BITS) + OBJECT_END);
+              byte next = buffer.get();
+              assert next == '}' : Character.getName(next);
+              consumeWhitespace(buffer);
+              return;
+            }
+            break;
+          default:
+            assert false : "invalid token " + ((char)peek);
+        }
+      }
+    }
+    private void collectItems() {
+      byte peek = buffer.get(buffer.position());
+      if (peek == ']') {
+        offsets.put((buffer.position() << TYPE_BITS) + ARRAY_END);
+        buffer.get();
+        consumeWhitespace(buffer);
+        return;
+      }
+      while (buffer.hasRemaining()) {
+        collectValue();
+        if (!consumeWhitespaceAndOptionalComma(buffer)) {
+          //whitespace consumed, failed to find comma, must be ]
+          offsets.put((buffer.position() << TYPE_BITS) + ARRAY_END);
+          byte next = buffer.get();
+          assert next == ']' : Character.getName(next);
+          consumeWhitespace(buffer);
+          return;
+        }
+      }
+    }
+
+    private void collectValue() {
       int position = buffer.position() << TYPE_BITS;
       byte token = buffer.get();
       switch (token) {
-        case ':':
-          //ignore
-          //TODO treat each pair as a pair? nothing special?
-          break;
         case '{':
-          offsets.put(lastOffset = position + OBJECT_START);
+          offsets.put(position + OBJECT_START);
           consumeWhitespace(buffer);
-          continue;
+          collectPairs();
+          return;
         case '[':
-          offsets.put(lastOffset = position + ARRAY_START);
+          offsets.put(position + ARRAY_START);
           consumeWhitespace(buffer);
-          continue;
-        case '}':
-          offsets.put(lastOffset = position + OBJECT_END);
-          consumeCommaAndWhitespace(buffer);
-          continue;
-        case ']':
-          offsets.put(lastOffset = position + ARRAY_END);
-          consumeCommaAndWhitespace(buffer);
-          continue;
+          collectItems();
+          return;
         case '"':
-          offsets.put(lastOffset = position + STRING);
+          offsets.put(position + STRING);
           consumeString(buffer);
           break;
         case 'n':
-          offsets.put(lastOffset = position + NULL);
+          offsets.put(position + NULL);
           consume(buffer, "ull");
           break;
         case 't':
-          offsets.put(lastOffset = position + BOOLEAN);
+          offsets.put(position + BOOLEAN);
           consume(buffer, "rue");
           break;
         case 'f':
-          offsets.put(lastOffset = position + BOOLEAN);
+          offsets.put(position + BOOLEAN);
           consume(buffer, "alse");
           break;
         case '-':
@@ -118,19 +174,22 @@ public class ByteSplittable implements Splittable {
         case '7':
         case '8':
         case '9':
-          offsets.put(lastOffset = position + NUMBER);
+          offsets.put(position + NUMBER);
           consumeNumber(buffer);
           break;
         default:
           assert false : "Unexpected " + Character.getName(token);
       }
-      consumeCommaOrColonAndWhitespace(buffer);
+      consumeWhitespace(buffer);
     }
 
-    buffer.rewind();
-    offsets.flip();
-    offsets.get();
-    return offsets;
+  }
+
+  @SuppressWarnings("PointlessArithmeticExpression")
+  private static IntBuffer collectOffsets(ByteBuffer buffer) {
+    OffsetCollector collector = new OffsetCollector(buffer);
+    collector.collect();
+    return collector.getOffsets();
   }
 
   private static void consumeWhitespace(ByteBuffer buffer) {
@@ -251,27 +310,23 @@ public class ByteSplittable implements Splittable {
 
   }
 
-  private static void consumeCommaAndWhitespace(ByteBuffer buffer) {
+  private static boolean consumeWhitespaceAndOptionalComma(ByteBuffer buffer) {
     consumeWhitespace(buffer);
     if (buffer.hasRemaining()) {
       byte peek = buffer.get(buffer.position());
       if (peek == ',') {
         buffer.get();
         consumeWhitespace(buffer);
+        return true;
       }
     }
-    consumeWhitespace(buffer);
+    return false;
   }
 
-  private static void consumeCommaOrColonAndWhitespace(ByteBuffer buffer) {
+  private static void consumeColonAndWhitespace(ByteBuffer buffer) {
     consumeWhitespace(buffer);
-    if (buffer.hasRemaining()) {
-      byte peek = buffer.get(buffer.position());
-      if (peek == ':' || peek == ',') {
-        buffer.get();
-        consumeWhitespace(buffer);
-      }
-    }
+    consume(buffer, ":");
+    consumeWhitespace(buffer);
   }
 
 

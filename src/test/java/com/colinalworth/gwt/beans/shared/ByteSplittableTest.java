@@ -18,6 +18,7 @@ public class ByteSplittableTest {
     assert new ByteSplittable(json2).isIndexed();
     assert new ByteSplittable(json3).isNumber();
     assert new ByteSplittable(json4).isBoolean();
+    assert new ByteSplittable(json5).isBoolean();
   }
 
   @Test
