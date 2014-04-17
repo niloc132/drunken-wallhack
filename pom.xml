@@ -14,6 +14,7 @@
 
     <gwt.version>2.6.0</gwt.version>
     <gwt.plugin.version>${gwt.version}</gwt.plugin.version>
+    <test.json><!-- use this property to specify a set of files/directories to test --></test.json>
   </properties>
   <dependencies>
     <dependency>
@@ -51,6 +52,16 @@
         <configuration>
           <target>${java.version}</target>
           <source>${java.version}</source>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.17</version>
+        <configuration>
+          <systemProperties>
+            <test.json>${test.json}</test.json>
+          </systemProperties>
         </configuration>
       </plugin>
       <plugin>
