@@ -13,12 +13,14 @@ public class ByteSplittableTest {
     ByteBuffer json3 = ByteBuffer.wrap("1".getBytes());
     ByteBuffer json4 = ByteBuffer.wrap("true".getBytes());
     ByteBuffer json5 = ByteBuffer.wrap("false".getBytes());
+    ByteBuffer json6 = ByteBuffer.wrap("\"a1\"".getBytes());
 
     assert new ByteSplittable(json1).isKeyed();
     assert new ByteSplittable(json2).isIndexed();
     assert new ByteSplittable(json3).isNumber();
     assert new ByteSplittable(json4).isBoolean();
     assert new ByteSplittable(json5).isBoolean();
+    assert new ByteSplittable(json6).isString();
   }
 
   @Test

@@ -63,6 +63,9 @@ public class ByteSplittable implements Splittable {
     private final ByteBuffer buffer;
     private final IntBuffer offsets;
 
+    private int offset;
+    private byte peek;
+
     private OffsetCollector(ByteBuffer buffer) {
       this.buffer = buffer;
       this.offsets = IntBuffer.allocate(buffer.limit() / 2 + 1);
@@ -83,9 +86,12 @@ public class ByteSplittable implements Splittable {
     }
 
     private void collectPairs() {
-      byte peek = buffer.get(buffer.position());
+      final int lastOffset = offset;
+      final int initialOffset = buffer.position() - 1;
+      consumeWhitespace(buffer);
+      peek = buffer.get(buffer.position());
       if (peek == '}') {
-        offsets.put((buffer.position() << TYPE_BITS) + OBJECT_END);
+        offsets.put(((buffer.position() - lastOffset) << TYPE_BITS) + OBJECT_END);
         buffer.get();
         consumeWhitespace(buffer);
         return;
@@ -94,39 +100,45 @@ public class ByteSplittable implements Splittable {
         peek = buffer.get(buffer.position());
         switch (peek) {//TODO drop switch when we consume a string
           case '"':
+            offset = initialOffset;
             collectValue();//string - TODO consume offset, but dont push to offsets
             consumeColonAndWhitespace(buffer);
+            offset = initialOffset;
             collectValue();//value - TODO consume type, and combine with offset above
-            consumeWhitespace(buffer);
+
             //either comma or }
             if (!consumeWhitespaceAndOptionalComma(buffer)) {
-              offsets.put((buffer.position() << TYPE_BITS) + OBJECT_END);
-              byte next = buffer.get();
-              assert next == '}' : Character.getName(next);
+              offsets.put(((buffer.position() - lastOffset) << TYPE_BITS) + OBJECT_END);
+              peek = buffer.get();
+              assert peek == '}' : Character.getName(peek);
               consumeWhitespace(buffer);
               return;
             }
             break;
           default:
-            assert false : "invalid token " + ((char)peek);
+            assert false : "invalid token " + Character.getName(peek);
         }
       }
     }
     private void collectItems() {
-      byte peek = buffer.get(buffer.position());
+      final int lastOffset = offset;
+      final int initialOffset = buffer.position() - 1;
+      consumeWhitespace(buffer);
+      peek = buffer.get(buffer.position());
       if (peek == ']') {
-        offsets.put((buffer.position() << TYPE_BITS) + ARRAY_END);
+        offsets.put(((buffer.position() - lastOffset) << TYPE_BITS) + ARRAY_END);
         buffer.get();
         consumeWhitespace(buffer);
         return;
       }
       while (buffer.hasRemaining()) {
+        offset = initialOffset;
         collectValue();
         if (!consumeWhitespaceAndOptionalComma(buffer)) {
           //whitespace consumed, failed to find comma, must be ]
-          offsets.put((buffer.position() << TYPE_BITS) + ARRAY_END);
-          byte next = buffer.get();
-          assert next == ']' : Character.getName(next);
+          offsets.put(((buffer.position() - lastOffset) << TYPE_BITS) + ARRAY_END);
+          peek = buffer.get();
+          assert peek == ']' : Character.getName(peek);
           consumeWhitespace(buffer);
           return;
         }
@@ -134,17 +146,14 @@ public class ByteSplittable implements Splittable {
     }
 
     private void collectValue() {
-      int position = buffer.position() << TYPE_BITS;
-      byte token = buffer.get();
-      switch (token) {
+      final int position = (buffer.position() - offset) << TYPE_BITS;
+      switch (buffer.get()) {
         case '{':
           offsets.put(position + OBJECT_START);
-          consumeWhitespace(buffer);
           collectPairs();
           return;
         case '[':
           offsets.put(position + ARRAY_START);
-          consumeWhitespace(buffer);
           collectItems();
           return;
         case '"':
@@ -178,7 +187,7 @@ public class ByteSplittable implements Splittable {
           consumeNumber(buffer);
           break;
         default:
-          assert false : "Unexpected " + Character.getName(token);
+          assert false : "Unexpected " + Character.getName(buffer.get(buffer.position() - 1));
       }
       consumeWhitespace(buffer);
     }
@@ -382,7 +391,7 @@ public class ByteSplittable implements Splittable {
   @Override
   public String asString() {
     int start = getFirstIndex();
-    buffer.position(start + 1);//assume already consumed the first one
+    buffer.position(start + 1);//consume assumes we already consumed the open quote
     consumeString(buffer);
     int end = buffer.position() - 2;//ignore both quotes
 
@@ -390,7 +399,7 @@ public class ByteSplittable implements Splittable {
     buffer.position(start + 1);//ignore leading quote
     buffer.get(bytes);
     //consume moves the marker, move it back and position back to 0
-    buffer.rewind().mark();
+    buffer.position(start).mark();
 
     return new String(bytes);
   }
@@ -434,9 +443,13 @@ public class ByteSplittable implements Splittable {
     newOffsets.position(offsets.position());
     newOffsets.mark();
 
+    ByteBuffer newBuffer = buffer.duplicate();
+    newBuffer.position(buffer.position() + (offsets.get(offsets.position() - 1) >> TYPE_BITS));
+    newBuffer.mark();
+
     offsets.reset();
     buffer.reset();
-    return new ByteSplittable(buffer, newOffsets);
+    return new ByteSplittable(newBuffer, newOffsets);
   }
 
   @Override
@@ -456,7 +469,7 @@ public class ByteSplittable implements Splittable {
       if (depth == 0) {
 
         //even numbered entries are keys
-        if (i % 2 == 0 && isString(next) && matches(buffer, (next >> TYPE_BITS) + 1, key, true)) {
+        if (i % 2 == 0 && isString(next) && matches(buffer, (next >> TYPE_BITS) + buffer.position() + 1, key, true)) {
           //advance one more to the value
           offsets.get();
           break;
@@ -471,9 +484,13 @@ public class ByteSplittable implements Splittable {
     newOffsets.position(offsets.position());
     newOffsets.mark();
 
+    ByteBuffer newBuffer = buffer.duplicate();
+    newBuffer.position(buffer.position() + (offsets.get(offsets.position() - 1) >> TYPE_BITS));
+    newBuffer.mark();
+
     offsets.reset();
     buffer.reset();
-    return new ByteSplittable(buffer, newOffsets);
+    return new ByteSplittable(newBuffer, newOffsets);
   }
 
   private boolean matches(ByteBuffer buffer, int index, String target, boolean endsWithQuote) {
@@ -571,7 +588,7 @@ public class ByteSplittable implements Splittable {
 
 
   private int getFirstIndex() {
-    return offsets.get(offsets.position() - 1) >> TYPE_BITS;
+    return buffer.position();
   }
 
   private int getFirstTypeDetails() {
