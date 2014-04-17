@@ -95,10 +95,13 @@ public class ByteSplittable implements Splittable {
       }
       while (buffer.hasRemaining()) {
         peek = buffer.get(buffer.position());
+
+
         switch (peek) {//TODO drop switch when we consume a string
           case '"':
-            offset = initialOffset;
-            collectValue();//string - TODO consume offset, but dont push to offsets
+            offsets.put(((buffer.position() - initialOffset) << TYPE_BITS) + STRING);
+            buffer.get();
+            consumeString(buffer);
             consumeColonAndWhitespace(buffer);
             offset = initialOffset;
             collectValue();//value - TODO consume type, and combine with offset above
