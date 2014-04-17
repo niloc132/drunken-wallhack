@@ -56,6 +56,53 @@ public class ThruputTest {
           @Override
           public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
             ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
+            while(bb.hasRemaining())bb.get();
+            return FileVisitResult.CONTINUE;
+          }
+        });
+      }
+    }
+  }
+
+  @Test
+  public void testPlaceboSplit() throws IOException {
+    warmupPlaceboSplit();
+
+    for (Path path : files) {
+      final double[] bytes = {0};
+      final double[] time = {0};
+      final List<String> guids = new ArrayList<>();
+      while (time[0] < 1000) {
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
+            bytes[0] += bb.limit();
+            long start = System.currentTimeMillis();
+            while(bb.hasRemaining())bb.get();
+
+            time[0] += System.currentTimeMillis() - start;
+
+            return FileVisitResult.CONTINUE;
+          }
+        });
+      }
+
+      System.out.println("Placebo on " + path);
+      System.out.println(bytes[0] + " bytes in " + (time[0] / 1000.0) + " seconds, " + bytes[0] / time[0] * 1000.0 / 1024.0 / 1024.0 + "mb/second");
+    }
+
+  }
+
+  public void warmupPlaceboSplit() throws IOException {
+    long start = System.currentTimeMillis();
+    while (start + 1000 * WARMUP_SECONDS > System.currentTimeMillis()) {
+      final List<String> guids = new ArrayList<>(4 * 5 * 20);
+      for (Path path : files) {
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
             ByteSplittable splittable = new ByteSplittable(bb);
             if (readGuids) {
               guids.add(splittable.get("guid").asString());
