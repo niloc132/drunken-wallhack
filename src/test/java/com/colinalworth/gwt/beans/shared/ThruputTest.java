@@ -5,9 +5,7 @@ import com.google.gson.JsonParser;
 
 import org.junit.Test;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,7 +22,6 @@ public class ThruputTest {
 
   private byte[] readFile(String size, int file) throws IOException {
     Path path = Paths.get("target", "test-classes", size, file + ".json");
-//    System.out.println(path);
     return Files.readAllBytes(path);
   }
 
@@ -71,8 +68,8 @@ public class ThruputTest {
       List<String> guids = new ArrayList<>(4 * 5 * 20);
       for (String size : sizes) {
         for (int i = 1; i <= 5; i++){
-          byte[] bytes = readFile(size, i);
-          JsonElement outer = gson.parse(new InputStreamReader(new ByteArrayInputStream(bytes)));
+          String json = new String(readFile(size, i));
+          JsonElement outer = gson.parse(json);
           guids.add(outer.getAsJsonObject().get("guid").getAsString());
         }
       }
@@ -90,8 +87,9 @@ public class ThruputTest {
       for (int i = 1; i <=5; i++) {
         byte[] ba = readFile("20k", i);
         bytes += ba.length;
+        String json = new String(ba);
         long start = System.currentTimeMillis();
-        JsonElement outer = gson.parse(new InputStreamReader(new ByteArrayInputStream(ba)));
+        JsonElement outer = gson.parse(json);
         guids.add(outer.getAsJsonObject().get("guid").getAsString());
         guids.add(outer.getAsJsonObject().get("items").getAsJsonArray().get(4).getAsJsonObject().get("guid").getAsString());
         time += System.currentTimeMillis() - start;

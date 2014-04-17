@@ -10,13 +10,10 @@ import java.util.List;
 import java.util.Map;
 
 public class ByteSplittable implements Splittable {
-  private static final ByteBuffer TRUE = ByteBuffer.wrap("true".getBytes());
-//  private static final ByteBuffer NULL = ByteBuffer.wrap("null".getBytes());
 
   private static final int TYPE_BITS = 3;
   private static final int MASK = 0x7;
   private static final int PARENT = 0x4;//also mask for primitive vs parent
-//  private static final int OBJ_MASK = 0x6;//skip the start/end bit
   private static final int END_MASK = 0x1;
 
   private static final int NULL = 0x0;
@@ -24,11 +21,11 @@ public class ByteSplittable implements Splittable {
   private static final int NUMBER = 0x2;
   private static final int BOOLEAN = 0x3;
 
-
   private static final int OBJECT_START = PARENT + 0x0;//with OBJ_MASK checks if is object
   private static final int OBJECT_END = PARENT + END_MASK;
   private static final int ARRAY_START = PARENT + 0x2;//with OBJ_MASK checks if is array
   private static final int ARRAY_END = PARENT + 0x2 + END_MASK;
+
 
   private static boolean isPrimitive(int offset) {
     return (offset & PARENT) == 0;
