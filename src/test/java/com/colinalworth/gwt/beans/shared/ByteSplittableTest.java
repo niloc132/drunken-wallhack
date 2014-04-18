@@ -82,4 +82,18 @@ public class ByteSplittableTest {
     assert split.get("obj").get("a").get(3).asBoolean() == true;
     assert split.get("obj").get("a").get(4).get("foo").asNumber() == 2;
   }
+  @Test
+  public void testNestedObjects2() {
+    ByteBuffer json1 = ByteBuffer.wrap("{\"obj\":{\"a\":[{}, 1, \"abc\", true, {\"foo\":2}]}}".getBytes());
+      LazySplittable split = new LazySplittable(json1, true);split.encode(true);
+
+    assert split.get("obj").isKeyed();
+    assert split.get("obj").get("a").isIndexed();
+    assert split.get("obj").get("a").get(0).isKeyed();
+    assert split.get("obj").get("a").get(1).asNumber() == 1;
+    assert split.get("obj").get("a").get(2).asString().equals("abc");
+    //noinspection PointlessBooleanExpression
+    assert split.get("obj").get("a").get(3).asBoolean() == true;
+    assert split.get("obj").get("a").get(4).get("foo").asNumber() == 2;
+  }
 }
