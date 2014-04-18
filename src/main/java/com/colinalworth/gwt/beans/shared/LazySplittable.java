@@ -93,18 +93,20 @@ public class LazySplittable implements Splittable {
 
             int i = out.get();
 
-            int i1 = i >> 31 & 1;
-            Encoding e = Encoding.values()[i1];
+            Encoding e = Encoding.values()[(i >> 31 & 1)];
+  int pos;
             switch (e) {
-                case depth:
-                    break;
+                case depth:            pos = (i << 3) >> 3;
+                    Depth d=Depth.values()[(i>>30) &1];
+                    Assignment a=Assignment.values()[(i>>29) &1];
+                     break;
                 case token:
-                    Token token = Token.values()[i >> 29 & 0b11];
+                    Token token = Token.values()[i >> 28 & 3];
 
                     switch (token) {
                         case quoted:
-                            int offset = (i << 0b11) >> 0b11;
-                            ByteBuffer byteBuffer = ByteSplittable.consumeString((ByteBuffer) in.position(offset), 3);
+                            int offset = (i << 4) >> 4;
+                            ByteBuffer byteBuffer = ByteSplittable.consumeString((ByteBuffer) in.position(offset), key.length());
                             if (byteBuffer != null) {
                                 for (int j = 0; j < bytes.length; j++)
                                     if (bytes[j] != in.get(offset + j))
@@ -207,14 +209,14 @@ public class LazySplittable implements Splittable {
 
             int i = out.get();
 
-            Encoding e = Encoding.values()[(i >> 31) & 0b1];
+            Encoding e = Encoding.values()[(i >> 31) & 1];
             switch (e) {
                 case depth:
-                    Depth depth = Depth.values()[(i) >> 30 & 0b1];
+                    Depth depth = Depth.values()[(i) >> 30 & 1];
                     switch (depth) {
                         case down:
-                            Assignment assignment = Assignment.values()[(i) >> 29 & 0b1];
-                            int seekTo = (i << 0b111) >> 0b111;
+                            Assignment assignment = Assignment.values()[(i) >> 29 & 1];
+                            int seekTo = (i << 3) >> 3;
                             int i1 = out.get();
                             int newLimit = (i1 << 2) >> 2;//can this be anything other than a close?
 
@@ -229,7 +231,7 @@ public class LazySplittable implements Splittable {
                     }
                     break;
                 case token:
-                    Token token = Token.values()[i >> 29 & 3];
+                    Token token = Token.values()[i >> 28 & 3];
 
                     int newLimit = out.hasRemaining() ? out.limit() : (out.get() << 4) >> 4;//can this be anything other than a close?
 
@@ -288,13 +290,13 @@ public class LazySplittable implements Splittable {
             switch (b) {
                 case '{':
                     if (care) {
-                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.associative).ordinal() << 29 | (i = (in.position() - 1)));
+                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.associative).ordinal() << 29 | (i = (in.position()  )));
                     }
                     encode(false);
                     break;
                 case '[':
                     if (care)
-                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.sequence).ordinal() << 29 | (i = (in.position() - 1)));
+                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.sequence).ordinal() << 29 | (i = (in.position()  )));
                     encode(false);
                     break;
                 case ']':
