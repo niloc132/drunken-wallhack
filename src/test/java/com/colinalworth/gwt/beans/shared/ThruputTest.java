@@ -107,7 +107,6 @@ public class ThruputTest {
             if (readGuids) {
               guids.add(splittable.get("guid").asString());
             }
-
             return FileVisitResult.CONTINUE;
           }
         });

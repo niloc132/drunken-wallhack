@@ -1,5 +1,6 @@
 package com.colinalworth.gwt.beans.shared;
 
+import com.google.web.bindery.autobean.shared.Splittable;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -83,12 +84,14 @@ public class ByteSplittableTest {
     assert split.get("obj").get("a").get(4).get("foo").asNumber() == 2;
   }
   @Test
-  public void testNestedObjects2() {
+  public void testLazyNestedObjects() {
     ByteBuffer json1 = ByteBuffer.wrap("{\"obj\":{\"a\":[{}, 1, \"abc\", true, {\"foo\":2}]}}".getBytes());
-      LazySplittable split = new LazySplittable(json1, true);split.encode(true);
+      LazySplittable split = new LazySplittable(json1, true);
 
     assert split.get("obj").isKeyed();
-    assert split.get("obj").get("a").isIndexed();
+      Splittable obj = split.get("obj");
+      Splittable a = obj.get("a");
+      assert a.isIndexed();
     assert split.get("obj").get("a").get(0).isKeyed();
     assert split.get("obj").get("a").get(1).asNumber() == 1;
     assert split.get("obj").get("a").get(2).asString().equals("abc");
