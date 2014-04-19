@@ -31,9 +31,11 @@ public class LazySplittable implements Splittable {
     IntBuffer out;
     private ByteBuffer in;
     private boolean topLevel;
+    private  Assignment assignment ;
 
-    public LazySplittable(ByteBuffer in, boolean topLevel) {
+    public LazySplittable(ByteBuffer in, boolean topLevel, Assignment assignment) {
         this.topLevel = topLevel;
+        this.assignment = assignment;
         if (topLevel) {
             System.err.println("<<" + UTF_8.decode(in.duplicate()));
             while (in.hasRemaining() && '{' != in.get()) ;
@@ -76,11 +78,6 @@ public class LazySplittable implements Splittable {
 
     @Override
     public Splittable deepCopy() {
-        return null;
-    }
-
-    @Override
-    public Splittable get(int i) {
         return null;
     }
 
@@ -150,12 +147,14 @@ public class LazySplittable implements Splittable {
 
     @Override
     public boolean isIndexed() {
-        return false;
+        return Assignment.indexed ==this.assignment
+                ;
     }
 
     @Override
     public boolean isKeyed() {
-        return topLevel;
+           return Assignment.keyed ==this.assignment
+                ;
     }
 
     @Override
@@ -222,12 +221,8 @@ public class LazySplittable implements Splittable {
 
                             final ByteBuffer newBuff = ((ByteBuffer) in.position(seekTo)).duplicate();
 
-                            switch (assignment) {
-                                case sequence:
-                                    return new ArraySplittable(newBuff);
-                                case associative:
-                                    return new KeyedSplittable(newBuff);
-                            }
+
+                                    return new LazySplittable((newBuff),false,assignment);
                     }
                     break;
                 case token:
@@ -247,7 +242,122 @@ public class LazySplittable implements Splittable {
                     }
             }
         }
-        return null;
+        return new Splittable() {
+            @Override
+            public boolean asBoolean() {
+                return false;
+            }
+
+            @Override
+            public double asNumber() {
+                return 0;
+            }
+
+            @Override
+            public void assign(Splittable splittable, int i) {
+
+            }
+
+            @Override
+            public void assign(Splittable splittable, String s) {
+
+            }
+
+            @Override
+            public String asString() {
+                return null;
+            }
+
+            @Override
+            public Splittable deepCopy() {
+                return null;
+            }
+
+            @Override
+            public Splittable get(int i) {
+                return null;
+            }
+
+            @Override
+            public Splittable get(String s) {
+                return null;
+            }
+
+            @Override
+            public String getPayload() {
+                return null;
+            }
+
+            @Override
+            public List<String> getPropertyKeys() {
+                return null;
+            }
+
+            @Override
+            public Object getReified(String s) {
+                return null;
+            }
+
+            @Override
+            public boolean isBoolean() {
+                return false;
+            }
+
+            @Override
+            public boolean isIndexed() {
+                return false;
+            }
+
+            @Override
+            public boolean isKeyed() {
+                return false;
+            }
+
+            @Override
+            public boolean isNull(int i) {
+                return false;
+            }
+
+            @Override
+            public boolean isNull(String s) {
+                return false;
+            }
+
+            @Override
+            public boolean isNumber() {
+                return false;
+            }
+
+            @Override
+            public boolean isReified(String s) {
+                return false;
+            }
+
+            @Override
+            public boolean isString() {
+                return false;
+            }
+
+            @Override
+            public boolean isUndefined(String s) {
+                return false;
+            }
+
+            @Override
+            public void setReified(String s, Object o) {
+
+            }
+
+            @Override
+            public void setSize(int i) {
+
+            }
+
+            @Override
+            public int size() {
+                return 0;
+            }
+        };
     }
 
     enum Encoding {depth, token}
@@ -258,7 +368,7 @@ public class LazySplittable implements Splittable {
     }
 
     enum Assignment {
-        sequence, associative,
+        indexed, keyed,
     }
 
     enum Token {
@@ -273,7 +383,7 @@ public class LazySplittable implements Splittable {
         ByteBuffer wrap = ByteBuffer.wrap(Files.readAllBytes(Paths.get(args[0])));
         System.err.println("");
         while (wrap.hasRemaining() && '{' != wrap.get()) ;
-        LazySplittable byteSplittable2 = new LazySplittable(wrap, true);
+        LazySplittable byteSplittable2 = new LazySplittable(wrap, true, Assignment.keyed);
 
 
     }
@@ -290,13 +400,13 @@ public class LazySplittable implements Splittable {
             switch (b) {
                 case '{':
                     if (care) {
-                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.associative).ordinal() << 29 | (i = (in.position()  )));
+                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.keyed).ordinal() << 29 | (i = (in.position()  )));
                     }
                     encode(false);
                     break;
                 case '[':
                     if (care)
-                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.sequence).ordinal() << 29 | (i = (in.position()  )));
+                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.indexed).ordinal() << 29 | (i = (in.position()  )));
                     encode(false);
                     break;
                 case ']':
@@ -361,7 +471,7 @@ public class LazySplittable implements Splittable {
 
     private static class KeyedSplittable extends LazySplittable {
         public KeyedSplittable(ByteBuffer newBuff) {
-            super(newBuff, false);
+            super(newBuff, false, assignment);
         }
 
         @Override
@@ -375,7 +485,7 @@ public class LazySplittable implements Splittable {
         private String string = String.valueOf(UTF_8.decode(in));
 
         public QuotedSplittable() {
-            super((ByteBuffer) ByteSplittable.consumeString(LazySplittable.this.in.duplicate()), false);
+            super((ByteBuffer) ByteSplittable.consumeString(LazySplittable.this.in.duplicate()), false, assignment);
         }
 
         @Override
@@ -393,7 +503,7 @@ public class LazySplittable implements Splittable {
         final private Double aDouble = Double.valueOf(String.valueOf(UTF_8.decode((ByteBuffer) in.rewind())));
 
         public NumericSplittable() {
-            super((ByteBuffer) ByteSplittable.consumeNumber(LazySplittable.this.in.duplicate()), false);
+            super((ByteBuffer) ByteSplittable.consumeNumber(LazySplittable.this.in.duplicate()), false, assignment);
         }
 
         @Override
@@ -410,7 +520,7 @@ public class LazySplittable implements Splittable {
 
     class SymbolicSplittable extends LazySplittable {
         public SymbolicSplittable() {
-            super((ByteBuffer) LazySplittable.this.in.duplicate(), false);
+            super((ByteBuffer) LazySplittable.this.in.duplicate(), false, assignment);
         }
 
         @Override
@@ -428,23 +538,27 @@ public class LazySplittable implements Splittable {
             return 'n' != in.get(0);
         }
     }
+    @Override
+    public Splittable get(int index) {
 
-    class ArraySplittable extends LazySplittable {
-        public ArraySplittable(ByteBuffer newBuff) {
-            super(newBuff, false);
+        int pos=0;
+        int i1 = 0;
+        while (out.mark().hasRemaining()) {
+
+            i1 = out.get();
+            Encoding e = Encoding.values()[((i1 >> 31)& 1) ];
+            Depth d = Depth.values()[((i1 >> 30) & 1)];
+            if (Encoding.depth== e&& Depth.up== d) continue;
+            if (pos == index) break;
+            pos++;
         }
 
-        @Override
-        public Splittable get(int i) {
-            LazySplittable.this.in.position(((IntBuffer) out.position(i)).get((i << 4) >> 4));
-            return LazySplittable.this.reify();
-        }
-
-        @Override
-        public boolean isIndexed() {
-            return true;
-        }
+        int newPosition = i1 << 4 >> 4;
+        in.position(newPosition);
+        out.reset();
+        return reify();
     }
+
 }
 
 

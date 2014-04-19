@@ -86,13 +86,15 @@ public class ByteSplittableTest {
   @Test
   public void testLazyNestedObjects() {
     ByteBuffer json1 = ByteBuffer.wrap("{\"obj\":{\"a\":[{}, 1, \"abc\", true, {\"foo\":2}]}}".getBytes());
-      LazySplittable split = new LazySplittable(json1, true);
+      LazySplittable split = new LazySplittable(json1, true, assignment);
 
     assert split.get("obj").isKeyed();
       Splittable obj = split.get("obj");
       Splittable a = obj.get("a");
       assert a.isIndexed();
-    assert split.get("obj").get("a").get(0).isKeyed();
+      Splittable splittable = split.get("obj").get("a");
+      Splittable splittable1 = splittable.get(0);
+      assert splittable1.isKeyed();
     assert split.get("obj").get("a").get(1).asNumber() == 1;
     assert split.get("obj").get("a").get(2).asString().equals("abc");
     //noinspection PointlessBooleanExpression

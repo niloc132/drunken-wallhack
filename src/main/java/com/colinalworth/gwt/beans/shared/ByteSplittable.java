@@ -222,7 +222,7 @@ public   static ByteBuffer consumeString(ByteBuffer buffer,int...target) {
           return doingLookup ?buffer.position()-1-orig==target[0]?buffer:null:buffer;
         case '\\':
 //          if (!buffer.hasRemaining()) {
-//            throw new IllegalStateException("can't end mid-string in an escape sequence");
+//            throw new IllegalStateException("can't end mid-string in an escape indexed");
 //          }
           byte next = buffer.get();
           switch (next) {
