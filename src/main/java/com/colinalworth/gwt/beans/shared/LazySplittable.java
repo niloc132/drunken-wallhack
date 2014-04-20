@@ -38,8 +38,6 @@ public class LazySplittable extends DummySplittable {
         this.in = in;
         out = IntBuffer.allocate(in.remaining() / 2);
         encode(true, isKeyed);
-//        out.flip();
-//        out = IntBuffer.allocate(out.remaining()).put(out);
     }
 
     public static Splittable create(ByteBuffer src) {
@@ -97,6 +95,7 @@ public class LazySplittable extends DummySplittable {
             }
         }
     }
+
     private static Splittable parseString(final ByteBuffer in1) {
 
         ByteBuffer slice = in1.slice();
@@ -264,13 +263,13 @@ public class LazySplittable extends DummySplittable {
                     if (keep && seekable) {
                         out.put(in.position() - 1);
                     }
-                    encode(false, true);
+                    consumeScope(in);
                     break;
                 case '[':
                     if (keep && seekable) {
                         out.put(in.position() - 1);
                     }
-                    encode(false, false);
+                     consumeScope(in);
                     break;
 
                 case '"':
@@ -316,6 +315,27 @@ public class LazySplittable extends DummySplittable {
 
             }
             seekable = true;
+        }
+    }
+
+    void consumeScope(ByteBuffer in) {
+
+        byte b;
+        int depth=1;
+        while(in.hasRemaining()&&depth>0) {
+            b = in.get();
+            switch (b){
+                case'[':
+                case'{':
+                    depth++;
+                    break;
+                case']':
+                case'}':
+                    depth--;
+                    break;
+                case '"':consumeString(in);
+                    break;
+            }
         }
     }
 
