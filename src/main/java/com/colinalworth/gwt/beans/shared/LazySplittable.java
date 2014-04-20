@@ -3,12 +3,8 @@ package com.colinalworth.gwt.beans.shared;
 
 import com.google.web.bindery.autobean.shared.Splittable;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.List;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 /*
@@ -27,539 +23,290 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * the License.
  */
 
-public class LazySplittable implements Splittable {
-    IntBuffer out;
-    private ByteBuffer in;
-    private boolean topLevel;
-    private  Assignment assignment ;
+public class LazySplittable extends DummySplittable {
+    private final ByteBuffer in;
 
-    public LazySplittable(ByteBuffer in, boolean topLevel, Assignment assignment) {
-        this.topLevel = topLevel;
-        this.assignment = assignment;
-        if (topLevel) {
-            System.err.println("<<" + UTF_8.decode(in.duplicate()));
-            while (in.hasRemaining() && '{' != in.get()) ;
+    private final boolean isKeyed;
+    private IntBuffer out;
+
+    public LazySplittable(ByteBuffer json1) {
+        this(json1, true, true);
+    }
+
+    @Override
+    public Splittable get(int i) {
+        if (!isIndexed()) throw new RuntimeException("json object not indexed");
+        in.position(out.get(i));
+        byte b;
+        if (in.position() > 0) {
+            if ('"' == (b = in.get(in.position() - 1)))
+                return parseString(in);
         }
-        this.in = in;
-        out = IntBuffer.allocate(in.limit() / 2);
-        encode(true);
+        b = ((ByteBuffer) in.mark()).get();
+        return createSplittable(in, b);
     }
 
-    public LazySplittable(ByteBuffer in, IntBuffer out) {
-        this.out = out;
-        this.in = in;
-    }
-
-
-    @Override
-    public boolean asBoolean() {
-        return false;
-    }
-
-    @Override
-    public double asNumber() {
-        return 0;
-    }
-
-    @Override
-    public void assign(Splittable splittable, int i) {
-
-    }
-
-    @Override
-    public void assign(Splittable splittable, String s) {
-
-    }
-
-    @Override
-    public String asString() {
-        return String.valueOf(UTF_8.decode((ByteBuffer) in.duplicate().rewind()));
-    }
-
-    @Override
-    public Splittable deepCopy() {
+    public static Splittable createSplittable(ByteBuffer in1, byte b) {
+        char x = (char) b;
+        switch (b) {
+            case '{':
+                return new LazySplittable(in1, false, true);
+            case '[':
+                return new LazySplittable(in1, false, false);
+            case '"':
+                return parseString(in1);
+            case '-':
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                return parseNum((ByteBuffer) in1.reset());
+            case 't':
+            case 'f':
+            case 'n':
+                return parseBool((ByteBuffer) in1.reset());
+            default:
+                break;
+        }
         return null;
     }
 
-    public Splittable get(String key) {
-        out.rewind();
-        byte[] bytes = key.getBytes(UTF_8);
 
-        searching:
-        while (out.hasRemaining()) {
+    private static Splittable parseString(final ByteBuffer in1) {
 
-            int i = out.get();
+        ByteBuffer slice = in1.slice();
+        ByteSplittable.consumeString(slice);
 
-            Encoding e = Encoding.values()[(i >> 31 & 1)];
-  int pos;
-            switch (e) {
-                case depth:            pos = (i << 3) >> 3;
-                    Depth d=Depth.values()[(i>>30) &1];
-                    Assignment a=Assignment.values()[(i>>29) &1];
-                     break;
-                case token:
-                    Token token = Token.values()[i >> 28 & 3];
-
-                    switch (token) {
-                        case quoted:
-                            int offset = (i << 4) >> 4;
-                            ByteBuffer byteBuffer = ByteSplittable.consumeString((ByteBuffer) in.position(offset), key.length());
-                            if (byteBuffer != null) {
-                                for (int j = 0; j < bytes.length; j++)
-                                    if (bytes[j] != in.get(offset + j))
-                                        continue searching;
-                                //matched
-                                return reify();
-                            }
-                        case numeric:
-                            break;
-                        case symbolic:
-                            break;
-                    }
+        ByteBuffer flip = (ByteBuffer) slice.flip();
+        if (flip.limit() > 3) {
+            if ('"' == flip.get(flip.limit() - 1)) {
+                if ('\\' != flip.get(flip.limit()- 2)) {
+                    flip.limit(flip.limit() - 1);
+                }
             }
         }
 
-
-        return null;
-
-
-    }
-
-    @Override
-    public String getPayload() {
-        return null;
-    }
-
-    @Override
-    public List<String> getPropertyKeys() {
-        return null;
-    }
-
-    @Override
-    public Object getReified(String s) {
-        return null;
-    }
-
-    @Override
-    public boolean isBoolean() {
-        return false;
-    }
-
-    @Override
-    public boolean isIndexed() {
-        return Assignment.indexed ==this.assignment
-                ;
-    }
-
-    @Override
-    public boolean isKeyed() {
-           return Assignment.keyed ==this.assignment
-                ;
-    }
-
-    @Override
-    public boolean isNull(int i) {
-        return false;
-    }
-
-    @Override
-    public boolean isNull(String s) {
-        return false;
-    }
-
-    @Override
-    public boolean isNumber() {
-        return false;
-    }
-
-    @Override
-    public boolean isReified(String s) {
-        return false;
-    }
-
-    @Override
-    public boolean isString() {
-        return false;
-    }
-
-    @Override
-    public boolean isUndefined(String s) {
-        return false;
-    }
-
-    @Override
-    public void setReified(String s, Object o) {
-
-    }
-
-    @Override
-    public void setSize(int i) {
-
-    }
-
-    @Override
-    public int size() {
-        return 0;
-    }
-
-    private Splittable reify() {
-
-        if (out.hasRemaining()) {
-
-            int i = out.get();
-
-            Encoding e = Encoding.values()[(i >> 31) & 1];
-            switch (e) {
-                case depth:
-                    Depth depth = Depth.values()[(i) >> 30 & 1];
-                    switch (depth) {
-                        case down:
-                            Assignment assignment = Assignment.values()[(i) >> 29 & 1];
-                            int seekTo = (i << 3) >> 3;
-                            int i1 = out.get();
-                            int newLimit = (i1 << 2) >> 2;//can this be anything other than a close?
-
-                            final ByteBuffer newBuff = ((ByteBuffer) in.position(seekTo)).duplicate();
-
-
-                                    return new LazySplittable((newBuff),false,assignment);
-                    }
-                    break;
-                case token:
-                    Token token = Token.values()[i >> 28 & 3];
-
-                    int newLimit = out.hasRemaining() ? out.limit() : (out.get() << 4) >> 4;//can this be anything other than a close?
-
-                    switch (token) {
-                        case quoted:
-                            return new QuotedSplittable();
-
-                        case numeric:
-                            return new NumericSplittable();
-                        case symbolic:
-                            return new SymbolicSplittable();
-
-                    }
-            }
-        }
-        return new Splittable() {
-            @Override
-            public boolean asBoolean() {
-                return false;
-            }
-
-            @Override
-            public double asNumber() {
-                return 0;
-            }
-
-            @Override
-            public void assign(Splittable splittable, int i) {
-
-            }
-
-            @Override
-            public void assign(Splittable splittable, String s) {
-
-            }
+        final String decode = String.valueOf(UTF_8.decode((ByteBuffer) flip));
+        LazySplittable lazySplittable = new LazySplittable(in1, false, false) {
 
             @Override
             public String asString() {
-                return null;
-            }
 
-            @Override
-            public Splittable deepCopy() {
-                return null;
-            }
-
-            @Override
-            public Splittable get(int i) {
-                return null;
-            }
-
-            @Override
-            public Splittable get(String s) {
-                return null;
-            }
-
-            @Override
-            public String getPayload() {
-                return null;
-            }
-
-            @Override
-            public List<String> getPropertyKeys() {
-                return null;
-            }
-
-            @Override
-            public Object getReified(String s) {
-                return null;
-            }
-
-            @Override
-            public boolean isBoolean() {
-                return false;
-            }
-
-            @Override
-            public boolean isIndexed() {
-                return false;
-            }
-
-            @Override
-            public boolean isKeyed() {
-                return false;
-            }
-
-            @Override
-            public boolean isNull(int i) {
-                return false;
-            }
-
-            @Override
-            public boolean isNull(String s) {
-                return false;
-            }
-
-            @Override
-            public boolean isNumber() {
-                return false;
-            }
-
-            @Override
-            public boolean isReified(String s) {
-                return false;
+                return decode;
             }
 
             @Override
             public boolean isString() {
-                return false;
+                return true;
+            }
+
+        };
+        return lazySplittable;
+    }
+
+    static Splittable parseBool(final ByteBuffer in1) {
+        final boolean aBoolean, isBoolean;
+        byte b = ((ByteBuffer) in1.reset()).get();
+        aBoolean = 't' == b;
+        isBoolean = 'n' != b;
+        return new DummySplittable() {
+            @Override
+            public boolean asBoolean() {
+                return aBoolean;
             }
 
             @Override
-            public boolean isUndefined(String s) {
-                return false;
-            }
-
-            @Override
-            public void setReified(String s, Object o) {
-
-            }
-
-            @Override
-            public void setSize(int i) {
-
-            }
-
-            @Override
-            public int size() {
-                return 0;
+            public boolean isBoolean() {
+                return isBoolean;
             }
         };
     }
 
-    enum Encoding {depth, token}
+    private static Splittable parseNum(final ByteBuffer in1) {
 
-    enum Depth {
-        up,
-        down,
+        final double aDouble = Double.parseDouble(UTF_8.decode((ByteBuffer) consumeNumber(in1.slice()).flip()).toString());
+
+        return new DummySplittable() {
+            @Override
+            public boolean isNumber() {
+                return true;
+            }
+
+            @Override
+            public double asNumber() {
+                return aDouble;
+            }
+        };
     }
 
-    enum Assignment {
-        indexed, keyed,
+    public static ByteBuffer consumeNumber(ByteBuffer slice) {
+        boolean sign = false, digits1 = false, dot = false, digits2 = false, etoken = false, esign = false, edigits = false;
+        byte b = ((ByteBuffer) slice.mark()).get();
+        sign = b == '-' || b == '+';
+        if (!sign) slice.reset();
+
+        while (slice.hasRemaining()) {
+            while (slice.hasRemaining() && Character.isDigit(b = ((ByteBuffer) slice.mark()).get())) ;
+            char x = (char) b;
+            switch (b) {
+                case '.':
+                    if (dot) throw new NumberFormatException("extra dot");
+                    dot = true;
+                case 'E':
+                case 'e':
+                    if (etoken/*||!(digits1||digits2)*/)
+                        throw new NumberFormatException("missing digits or redundant exponent");
+                    etoken = true;
+                case '+':
+                case '-':
+                    if (esign || !etoken || edigits) throw new NumberFormatException("bad exponent sign");
+                default:
+                    if (Character.isDigit(b)) {
+//                        boolean x = !dot ? digits1 : !etoken ? digits2 : edigits |= true;
+                        if (!etoken)
+                            if (!dot)
+                                digits1 = true;
+                            else
+                                digits2 = true;
+                        else
+                            edigits = true;
+                    } else {
+                        return (ByteBuffer) slice.reset();
+                    }
+            }
+        }
+
+        return null;
     }
 
-    enum Token {
-        quoted,
-        numeric,
-        symbolic
+    @Override
+    public Splittable get(String s) {
+        out.rewind();
+        if (!isKeyed) throw new RuntimeException("must have int keys");
+        byte[] bytes = s.getBytes();
+        while (out.hasRemaining()) {
+            int c = 0;
+            int i = out.get();
+            byte b = -1;
+            in.position(i);
+//            int newLimit = out.duplicate().get();
+//            System.err.println(UTF_8.decode((ByteBuffer) in.duplicate().limit(newLimit)));
+            char x;
+            while (in.hasRemaining() && (b = in.get()) == bytes[c++] && c < bytes.length) {
+                x = (char) b;
+                System.err.println("" + x);
+            }//strcmp
+            if (c < bytes.length || !in.hasRemaining() || in.get() != '"') continue;
+
+            while (in.hasRemaining()) {
+                b = ((ByteBuffer) in.mark()).get();
+                Splittable splittable = createSplittable(in, b);
+                if (null != splittable) return splittable;
+            }
+
+        }
+        return null;/* new LazySplittable(ByteBuffer.allocate(0),false,true);*/
     }
 
-    enum interest {keys, resume}
-
-    public static void main(String[] args) throws IOException {
-        ByteBuffer wrap = ByteBuffer.wrap(Files.readAllBytes(Paths.get(args[0])));
-        System.err.println("");
-        while (wrap.hasRemaining() && '{' != wrap.get()) ;
-        LazySplittable byteSplittable2 = new LazySplittable(wrap, true, Assignment.keyed);
-
-
+    @Override
+    public boolean isIndexed() {
+        return !isKeyed && !isString() && !isBoolean() && !isNumber();
     }
 
-    void encode(boolean care) {
-        byte b = 0;
+    @Override
+    public boolean isKeyed() {
+        return isKeyed;
+    }
+
+
+    public static enum Encoding {keyed, indexed, quoted, numeric, symbolic}
+
+    public LazySplittable(ByteBuffer in, boolean topLevel, boolean isKeyed) {
+        this.isKeyed = isKeyed;
+
+        if (topLevel) {
+            while (in.hasRemaining() && in.get() != '{') ;
+        }
+        this.in = in;
+
+
+        out = IntBuffer.allocate(in.remaining() / 2);
+        encode(true, isKeyed);
+        out.flip();
+        out = IntBuffer.allocate(out.remaining()).put(out);
+    }
+
+    void encode(boolean keep, boolean isKeyed) {
+
+        boolean seekable = true;
+        byte b = -1;
+        searching:
         while (in.hasRemaining()) {
-            while (in.hasRemaining() && Character.isWhitespace(b = in.get())) ;
-            Encoding e = null;
-            Depth d = null;
-            Assignment a = null;
-            Token t = null;
-            int i = 0;
+            while (in.hasRemaining() && Character.isWhitespace(b = ((ByteBuffer) in.mark()).get())) ;
+            char x = (char) b;
             switch (b) {
                 case '{':
-                    if (care) {
-                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.keyed).ordinal() << 29 | (i = (in.position()  )));
+                    if (keep && seekable) {
+                        out.put(in.position() - 1);
                     }
-                    encode(false);
+                    encode(false, true);
                     break;
                 case '[':
-                    if (care)
-                        out.put((e = Encoding.depth).ordinal() << 31 | (d = Depth.down).ordinal() << 30 | (a = Assignment.indexed).ordinal() << 29 | (i = (in.position()  )));
-                    encode(false);
-                    break;
-                case ']':
-                case '}':
-
-                    int i1 = (e = Encoding.depth).ordinal() << 31 | (d = Depth.up).ordinal() << 30 | (i = in.position() - 1);
-                    if (care) {
-                        out.put(i1);
-
-                        break;
-                    } else {
-                        debug(care, e, d, a, t, i1);
-                        return;
+                    if (keep && seekable) {
+                        out.put(in.position() - 1);
                     }
+                    encode(false, false);
+                    break;
+
                 case '"':
-                    if (care)
-                        out.put((e = Encoding.token).ordinal() << 31 | (t = Token.quoted).ordinal() << 30 | (i = in.position()));
-                    ByteSplittable.consumeString(in);
+                    if (keep && seekable) {
+                        out.put(in.position());
+                    }
+                    ByteSplittable.consumeString((ByteBuffer) in);
+                    if (keep && seekable && isKeyed) {
+                        seekable = false;
+                        continue searching;
+                    }
                     break;
+                case '-':
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    if (keep && seekable) out.put(in.position() - 1);
+
+                    consumeNumber(in);
+                    break;
+
+                case 't':
+                case 'f':
+                case 'n':
+                    if (keep && seekable) {
+                        out.put(in.position() - 1);
+                    }
+                    while (in.hasRemaining() && Character.isAlphabetic(in.get())) ;
+                    break;
+
+                case '}':
+                case ']':
+                    return;
                 default:
-                    if (care)
-                        switch (b) {
-                            case '-':
-                            case '0':
-                            case '1':
-                            case '2':
-                            case '3':
-                            case '4':
-                            case '5':
-                            case '6':
-                            case '7':
-                            case '8':
-                            case '9':
-                                out.put((e = Encoding.token).ordinal() << 31 | (t = Token.numeric).ordinal() << 30 | (i = in.position() - 1));
-                                ByteSplittable.consumeNumber(in);
-                                break;
+                    continue searching;
 
-                            case 'n':
-                            case 't':
-                            case 'f':
-                                out.put((e = Encoding.token).ordinal() << 31 | (t = Token.symbolic).ordinal() << 30 | (i = in.position() - 1));
-                                while (in.hasRemaining() && Character.isAlphabetic(b = in.get())) ;
-                            default:
-                                break;
-                        }
-                    break;
             }
-            debug(care, e, d, a, t, i);
-        }
-        if (care) out.flip();
-    }
-
-    private void debug(boolean care, Encoding e, Depth d, Assignment a, Token t, int i) {
-        if (care) System.err.println(">>" +
-                        (e != null ? "e:" + e + ":" : "") +
-                        (d != null ? "d:" + d + ":" : "") +
-                        (a != null ? "a:" + a + ":" : "") +
-                        (t != null ? "t:" + t + ":" : "") +
-                        i
-        );
-    }
-
-    private static class KeyedSplittable extends LazySplittable {
-        public KeyedSplittable(ByteBuffer newBuff) {
-            super(newBuff, false, assignment);
-        }
-
-        @Override
-        public boolean isKeyed() {
-            return true;
+            seekable = true;
         }
     }
-
-    class QuotedSplittable extends LazySplittable {
-
-        private String string = String.valueOf(UTF_8.decode(in));
-
-        public QuotedSplittable() {
-            super((ByteBuffer) ByteSplittable.consumeString(LazySplittable.this.in.duplicate()), false, assignment);
-        }
-
-        @Override
-        public String asString() {
-            return string;
-        }
-
-        public boolean isString() {
-            return true;
-        }
-    }
-
-    class NumericSplittable extends LazySplittable {
-
-        final private Double aDouble = Double.valueOf(String.valueOf(UTF_8.decode((ByteBuffer) in.rewind())));
-
-        public NumericSplittable() {
-            super((ByteBuffer) ByteSplittable.consumeNumber(LazySplittable.this.in.duplicate()), false, assignment);
-        }
-
-        @Override
-        public boolean isNumber() {
-            return true;
-        }
-
-        @Override
-        public double asNumber() {
-            return aDouble;
-        }
-
-    }
-
-    class SymbolicSplittable extends LazySplittable {
-        public SymbolicSplittable() {
-            super((ByteBuffer) LazySplittable.this.in.duplicate(), false, assignment);
-        }
-
-        @Override
-        public boolean isUndefined(String s) {
-            return 'n' == in.get(0);
-        }
-
-        @Override
-        public boolean asBoolean() {
-            return 't' == in.get(0);
-        }
-
-        @Override
-        public boolean isBoolean() {
-            return 'n' != in.get(0);
-        }
-    }
-    @Override
-    public Splittable get(int index) {
-
-        int pos=0;
-        int i1 = 0;
-        while (out.mark().hasRemaining()) {
-
-            i1 = out.get();
-            Encoding e = Encoding.values()[((i1 >> 31)& 1) ];
-            Depth d = Depth.values()[((i1 >> 30) & 1)];
-            if (Encoding.depth== e&& Depth.up== d) continue;
-            if (pos == index) break;
-            pos++;
-        }
-
-        int newPosition = i1 << 4 >> 4;
-        in.position(newPosition);
-        out.reset();
-        return reify();
-    }
-
 }
-
-
-

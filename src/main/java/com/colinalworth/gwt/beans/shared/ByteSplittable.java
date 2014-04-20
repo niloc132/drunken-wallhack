@@ -56,7 +56,7 @@ public class ByteSplittable implements Splittable {
     return (offset & END_MASK) == END_MASK;
   }
 
-    private static class OffsetCollector {
+  private static class OffsetCollector {
     private final ByteBuffer buffer;
     private final IntBuffer offsets;
 
@@ -208,21 +208,16 @@ public class ByteSplittable implements Splittable {
     buffer.reset();
   }
 
-public   static ByteBuffer consumeString(ByteBuffer buffer,int...target) {
-      int orig = 0;
-      boolean doingLookup = target.length > 0;
-      if(doingLookup&&target[0]>buffer.remaining())return null;
-      if(doingLookup)orig=buffer.position();
+  public static void consumeString(ByteBuffer buffer) {
     //TODO unicode wat?
     while (buffer.hasRemaining()) {
-      if(doingLookup&&buffer.position()-orig>target[0])return null;
       byte current = buffer.get();
       switch (current) {
         case '"':
-          return doingLookup ?buffer.position()-1-orig==target[0]?buffer:null:buffer;
+          return;
         case '\\':
 //          if (!buffer.hasRemaining()) {
-//            throw new IllegalStateException("can't end mid-string in an escape indexed");
+//            throw new IllegalStateException("can't end mid-string in an escape sequence");
 //          }
           byte next = buffer.get();
           switch (next) {
@@ -265,7 +260,7 @@ public   static ByteBuffer consumeString(ByteBuffer buffer,int...target) {
     }
   }
 
-  public static ByteBuffer consumeNumber(ByteBuffer buffer) {
+  private static void consumeNumber(ByteBuffer buffer) {
     buffer.mark();
     byte next = buffer.get(buffer.position() - 1);//zeroth digit, 0-9 or -
     if (next == '-') {
@@ -320,7 +315,7 @@ public   static ByteBuffer consumeString(ByteBuffer buffer,int...target) {
       }
     }
     buffer.reset();
-return buffer;
+
 
   }
 

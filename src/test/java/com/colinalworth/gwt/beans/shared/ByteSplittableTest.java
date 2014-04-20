@@ -85,20 +85,28 @@ public class ByteSplittableTest {
   }
   @Test
   public void testLazyNestedObjects() {
-    ByteBuffer json1 = ByteBuffer.wrap("{\"obj\":{\"a\":[{}, 1, \"abc\", true, {\"foo\":2}]}}".getBytes());
-      LazySplittable split = new LazySplittable(json1, true, assignment);
+      String s1 = "{\"obj\":{\"a\":[{}, 1, \"abc\", true, {\"foo\":2}]}}";
+      ByteBuffer json1 = ByteBuffer.wrap(s1.getBytes());
+      System.err.println(s1);     LazySplittable split = new LazySplittable(json1  ) ;
 
-    assert split.get("obj").isKeyed();
+      Splittable obj1 = split.get("obj");
+      assert obj1.isKeyed();
       Splittable obj = split.get("obj");
       Splittable a = obj.get("a");
       assert a.isIndexed();
       Splittable splittable = split.get("obj").get("a");
       Splittable splittable1 = splittable.get(0);
       assert splittable1.isKeyed();
-    assert split.get("obj").get("a").get(1).asNumber() == 1;
-    assert split.get("obj").get("a").get(2).asString().equals("abc");
+      Splittable splittable2 = split.get("obj").get("a").get(1);
+      assert splittable2.asNumber() == 1;
+      Splittable splittable4 = split.get("obj").get("a");
+      Splittable splittable3 = splittable4.get(2);
+      String s = splittable3.asString();
+      assert s.equals("abc");
     //noinspection PointlessBooleanExpression
-    assert split.get("obj").get("a").get(3).asBoolean() == true;
+      Splittable splittable6 = split.get("obj").get("a");
+      Splittable splittable5 = splittable6.get(3);
+      assert splittable5.asBoolean() == true;
     assert split.get("obj").get("a").get(4).get("foo").asNumber() == 2;
   }
 }
