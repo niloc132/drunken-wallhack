@@ -29,23 +29,23 @@ public class LazySplittable extends DummySplittable {
     private final boolean isKeyed;
     private IntBuffer out;
 
-    public LazySplittable(ByteBuffer json1) {
-        this(json1, true, true);
+    private LazySplittable(ByteBuffer json1) {
+        this(json1, false, false);
     }
 
-    @Override
-    public Splittable get(int i) {
-        if (!isIndexed()) throw new RuntimeException("json object not indexed");
-        in.position(out.get(i));
-        byte b;
-        if (in.position() > 0) {
-            if ('"' == (b = in.get(in.position() - 1)))
-                return parseString(in);
-        }
-        b = ((ByteBuffer) in.mark()).get();
-        return createSplittable(in, b);
+    private LazySplittable(ByteBuffer in, boolean topLevel, boolean isKeyed) {
+        this.isKeyed = isKeyed;
+        this.in = in;
+        out = IntBuffer.allocate(in.remaining() / 2);
+        encode(true, isKeyed);
+        out.flip();
+        out = IntBuffer.allocate(out.remaining()).put(out);
     }
 
+    public static Splittable create(ByteBuffer src) {
+        while(src.hasRemaining()&&Character.isWhitespace(((ByteBuffer) src.mark()).get()));
+        return createSplittable(src,((ByteBuffer) src.reset()).get());
+    }
     public static Splittable createSplittable(ByteBuffer in1, byte b) {
         char x = (char) b;
         switch (b) {
@@ -84,9 +84,9 @@ public class LazySplittable extends DummySplittable {
         ByteSplittable.consumeString(slice);
 
         ByteBuffer flip = (ByteBuffer) slice.flip();
-        if (flip.limit() > 3) {
+        if (flip.limit() > 1) {
             if ('"' == flip.get(flip.limit() - 1)) {
-                if ('\\' != flip.get(flip.limit()- 2)) {
+                if ('\\' != flip.get(flip.limit() - 2)) {
                     flip.limit(flip.limit() - 1);
                 }
             }
@@ -165,7 +165,8 @@ public class LazySplittable extends DummySplittable {
                     etoken = true;
                 case '+':
                 case '-':
-                    if (esign || !etoken || edigits) throw new NumberFormatException("bad exponent sign");
+                    if (esign /*|| !etoken || edigits*/) throw new NumberFormatException("bad exponent sign");
+                    esign=true;
                 default:
                     if (Character.isDigit(b)) {
 //                        boolean x = !dot ? digits1 : !etoken ? digits2 : edigits |= true;
@@ -186,6 +187,19 @@ public class LazySplittable extends DummySplittable {
     }
 
     @Override
+    public Splittable get(int i) {
+        if (!isIndexed()) throw new RuntimeException("json object not indexed");
+        in.position(out.get(i));
+        byte b;
+        if (in.position() > 0) {
+            if ('"' == (b = in.get(in.position() - 1)))
+                return parseString(in);
+        }
+        b = ((ByteBuffer) in.mark()).get();
+        return createSplittable(in, b);
+    }
+
+    @Override
     public Splittable get(String s) {
         out.rewind();
         if (!isKeyed) throw new RuntimeException("must have int keys");
@@ -195,13 +209,7 @@ public class LazySplittable extends DummySplittable {
             int i = out.get();
             byte b = -1;
             in.position(i);
-//            int newLimit = out.duplicate().get();
-//            System.err.println(UTF_8.decode((ByteBuffer) in.duplicate().limit(newLimit)));
-            char x;
-            while (in.hasRemaining() && (b = in.get()) == bytes[c++] && c < bytes.length) {
-                x = (char) b;
-                System.err.println("" + x);
-            }//strcmp
+            while (in.hasRemaining() && (b = in.get()) == bytes[c++] && c < bytes.length) ;
             if (c < bytes.length || !in.hasRemaining() || in.get() != '"') continue;
 
             while (in.hasRemaining()) {
@@ -222,24 +230,6 @@ public class LazySplittable extends DummySplittable {
     @Override
     public boolean isKeyed() {
         return isKeyed;
-    }
-
-
-    public static enum Encoding {keyed, indexed, quoted, numeric, symbolic}
-
-    public LazySplittable(ByteBuffer in, boolean topLevel, boolean isKeyed) {
-        this.isKeyed = isKeyed;
-
-        if (topLevel) {
-            while (in.hasRemaining() && in.get() != '{') ;
-        }
-        this.in = in;
-
-
-        out = IntBuffer.allocate(in.remaining() / 2);
-        encode(true, isKeyed);
-        out.flip();
-        out = IntBuffer.allocate(out.remaining()).put(out);
     }
 
     void encode(boolean keep, boolean isKeyed) {
@@ -309,4 +299,6 @@ public class LazySplittable extends DummySplittable {
             seekable = true;
         }
     }
+
+    public static enum Encoding {keyed, indexed, quoted, numeric, symbolic}
 }

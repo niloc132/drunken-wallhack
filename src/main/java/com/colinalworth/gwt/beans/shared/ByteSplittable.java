@@ -240,12 +240,9 @@ public class ByteSplittable implements Splittable {
               }
             default:
               throw new IllegalStateException("Illegal escape: \\" + Character.getName(next));
-
           }
       }
     }
-    throw new IllegalStateException("can't end mid-string");
-
   }
 
   private static void consume(ByteBuffer buffer, String remaining) {
