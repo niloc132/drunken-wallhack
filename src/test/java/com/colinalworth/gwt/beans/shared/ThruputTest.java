@@ -20,7 +20,7 @@ public class ThruputTest {
 
 
     private List<Path> files;
-    private boolean readGuids = true;
+    private boolean readGuids = false;
 
     @Before
     public void getPaths() {
@@ -46,8 +46,6 @@ public class ThruputTest {
 
     @Test
     public void testPlaceboSplit() throws IOException {
-
-
         for (Path path : files) {
             final double[] bytes = {0};
             final double[] time = {0};
@@ -132,7 +130,7 @@ public class ThruputTest {
                     @Override
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                         ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
-                        LazySplittable.create(bb);
+                        ShallowSplittable.create(bb);
                         return FileVisitResult.CONTINUE;
                     }
                 });
@@ -155,7 +153,7 @@ public class ThruputTest {
                         ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
                         bytes[0] += bb.limit();
                         long start = System.currentTimeMillis();
-                        Splittable splittable = LazySplittable.create(bb);
+                        Splittable splittable = ShallowSplittable.create(bb);
                         if (readGuids) {
                             guids.add(splittable.get("guid").asString());
                             guids.add(splittable.get("items").get(4).get("guid").asString());
@@ -167,7 +165,7 @@ public class ThruputTest {
                 });
             }
 
-            System.out.println("LazySplittable on " + path);
+            System.out.println("ShallowSplittable on " + path);
             System.out.println(bytes[0] + " bytes in " + (time[0] / 1000.0) + " seconds, " + bytes[0] / time[0] * 1000.0 / 1024.0 / 1024.0 + "mb/second");
         }
 
@@ -223,7 +221,8 @@ public class ThruputTest {
             }
 
             System.out.println("Gson's JsonParser on " + path);
-            System.out.println(bytes[0] + " bytes in " + (time[0] / 1000.0) + " seconds, " + bytes[0] / time[0] * 1000.0 / 1024.0 / 1024.0 + "mb/second");
+            double v = time[0];
+            System.out.println(bytes[0] + " bytes in " + (v / 1000.0) + " seconds, " + bytes[0] / time[0] * 1000.0 / 1024.0 / 1024.0 + "mb/second");
         }
 
     }

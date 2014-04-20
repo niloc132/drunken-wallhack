@@ -75,7 +75,7 @@ public class ByteSplittableTest {
         System.err.println("" + s);
         ByteBuffer json1 = ByteBuffer.wrap(s.getBytes());
 
-        Splittable split = LazySplittable.create(json1);
+        Splittable split = ShallowSplittable.create(json1);
 
         assert split.isIndexed();
         assert split.get(0).asNumber() == 0;
@@ -113,7 +113,7 @@ public class ByteSplittableTest {
         String s1 = "{\"obj\":{\"a\":[{}, 1, \"abc\", true, {\"foo\":2}]}}";
         ByteBuffer json1 = ByteBuffer.wrap(s1.getBytes());
         System.err.println(s1);
-        Splittable split = LazySplittable.create(json1);
+        Splittable split = ShallowSplittable.create(json1);
 
         Splittable obj1 = split.get("obj");
         assert obj1.isKeyed();
