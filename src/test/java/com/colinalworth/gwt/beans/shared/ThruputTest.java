@@ -46,7 +46,7 @@ public class ThruputTest {
 
     @Test
     public void testPlaceboSplit() throws IOException {
-        warmupPlaceboSplit();
+
 
         for (Path path : files) {
             final double[] bytes = {0};
@@ -73,27 +73,6 @@ public class ThruputTest {
         }
 
     }
-
-    public void warmupPlaceboSplit() throws IOException {
-        long start = System.currentTimeMillis();
-        while (start + 1000 * WARMUP_SECONDS > System.currentTimeMillis()) {
-            final List<String> guids = new ArrayList<>(4 * 5 * 20);
-            for (Path path : files) {
-                Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
-                    @Override
-                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                        ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
-                        ByteSplittable splittable = new ByteSplittable(bb);
-                        if (readGuids) {
-                            guids.add(splittable.get("guid").asString());
-                        }
-                        return FileVisitResult.CONTINUE;
-                    }
-                });
-            }
-        }
-    }
-
     public void warmupBBSplit() throws IOException {
         long start = System.currentTimeMillis();
         while (start + 1000 * WARMUP_SECONDS > System.currentTimeMillis()) {
@@ -103,13 +82,14 @@ public class ThruputTest {
                     @Override
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                         ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
-                        while (bb.hasRemaining()) bb.get();
+                        new ByteSplittable(bb);
                         return FileVisitResult.CONTINUE;
                     }
                 });
             }
         }
     }
+
     @Test
     public void testBBSplit() throws IOException {
         warmupBBSplit();
@@ -143,7 +123,7 @@ public class ThruputTest {
 
     }
 
-  public void warmupLazySplit() throws IOException {
+    public void warmupLazySplit() throws IOException {
         long start = System.currentTimeMillis();
         while (start + 1000 * WARMUP_SECONDS > System.currentTimeMillis()) {
             final List<String> guids = new ArrayList<>(4 * 5 * 20);
@@ -152,16 +132,17 @@ public class ThruputTest {
                     @Override
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                         ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
-                        while (bb.hasRemaining()) bb.get();
+                        LazySplittable.create(bb);
                         return FileVisitResult.CONTINUE;
                     }
                 });
             }
         }
     }
+
     @Test
     public void testLazySplit() throws IOException {
-        warmupLazySplit();
+//        warmupLazySplit();
 
         for (Path path : files) {
             final double[] bytes = {0};
@@ -191,7 +172,6 @@ public class ThruputTest {
         }
 
     }
-
 
     public void warmupGson() throws IOException {
         final JsonParser gson = new JsonParser();

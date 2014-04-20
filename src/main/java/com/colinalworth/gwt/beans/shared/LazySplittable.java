@@ -38,8 +38,8 @@ public class LazySplittable extends DummySplittable {
         this.in = in;
         out = IntBuffer.allocate(in.remaining() / 2);
         encode(true, isKeyed);
-        out.flip();
-        out = IntBuffer.allocate(out.remaining()).put(out);
+//        out.flip();
+//        out = IntBuffer.allocate(out.remaining()).put(out);
     }
 
     public static Splittable create(ByteBuffer src) {
@@ -78,10 +78,29 @@ public class LazySplittable extends DummySplittable {
     }
 
 
+    public static void consumeString(ByteBuffer buffer) {
+        //TODO unicode wat?
+        while (buffer.hasRemaining()) {
+            byte current = buffer.get();
+            switch (current) {
+                case '"':
+                    return;
+                case '\\':
+                    byte next = buffer.get();
+                    switch (next) {
+                        case 'u':
+                            buffer.position(buffer.position()+4);
+                        default:
+                            continue;
+
+                    }
+            }
+        }
+    }
     private static Splittable parseString(final ByteBuffer in1) {
 
         ByteBuffer slice = in1.slice();
-        ByteSplittable.consumeString(slice);
+        consumeString(slice);
 
         ByteBuffer flip = (ByteBuffer) slice.flip();
         if (flip.limit() > 1) {
@@ -258,7 +277,7 @@ public class LazySplittable extends DummySplittable {
                     if (keep && seekable) {
                         out.put(in.position());
                     }
-                    ByteSplittable.consumeString((ByteBuffer) in);
+                    consumeString((ByteBuffer) in);
                     if (keep && seekable && isKeyed) {
                         seekable = false;
                         continue searching;
@@ -300,5 +319,4 @@ public class LazySplittable extends DummySplittable {
         }
     }
 
-    public static enum Encoding {keyed, indexed, quoted, numeric, symbolic}
 }

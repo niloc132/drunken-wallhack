@@ -208,7 +208,7 @@ public class ByteSplittable implements Splittable {
     buffer.reset();
   }
 
-  public static void consumeString(ByteBuffer buffer) {
+  private static void consumeString(ByteBuffer buffer) {
     //TODO unicode wat?
     while (buffer.hasRemaining()) {
       byte current = buffer.get();
