@@ -31,29 +31,20 @@ public class ByteSplittable implements Splittable {
     return (offset & PARENT) == 0;
   }
   private static boolean isString(int offset) {
-    assert isPrimitive(offset);
     return (offset & MASK) == STRING;
   }
   private static boolean isNumber(int offset) {
-    assert isPrimitive(offset);
     return (offset & MASK) == NUMBER;
   }
   private static boolean isBoolean(int offset) {
-    assert isPrimitive(offset);
     return (offset & MASK) == BOOLEAN;
   }
 
   private static boolean isObject(int offset) {
-    assert !isPrimitive(offset);
     return (offset & MASK) == OBJECT_START;
   }
   private static boolean isArray(int offset) {
-    assert !isPrimitive(offset);
     return (offset & MASK) == ARRAY_START;
-  }
-  private static boolean isEnd(int offset) {
-    assert !isPrimitive(offset);
-    return (offset & END_MASK) == END_MASK;
   }
 
   private static class OffsetCollector {
@@ -88,7 +79,6 @@ public class ByteSplittable implements Splittable {
       consumeWhitespace(buffer);
       peek = buffer.get(buffer.position());
       if (peek == '}') {
-        offsets.put(((buffer.position() - lastOffset) << TYPE_BITS) + OBJECT_END);
         buffer.get();
         consumeWhitespace(buffer);
         return;
@@ -108,7 +98,6 @@ public class ByteSplittable implements Splittable {
 
             //either comma or }
             if (!consumeWhitespaceAndOptionalComma(buffer)) {
-              offsets.put(((buffer.position() - lastOffset) << TYPE_BITS) + OBJECT_END);
               peek = buffer.get();
               assert peek == '}' : Character.getName(peek);
               consumeWhitespace(buffer);
@@ -126,7 +115,6 @@ public class ByteSplittable implements Splittable {
       consumeWhitespace(buffer);
       peek = buffer.get(buffer.position());
       if (peek == ']') {
-        offsets.put(((buffer.position() - lastOffset) << TYPE_BITS) + ARRAY_END);
         buffer.get();
         consumeWhitespace(buffer);
         return;
@@ -136,7 +124,6 @@ public class ByteSplittable implements Splittable {
         collectValue();
         if (!consumeWhitespaceAndOptionalComma(buffer)) {
           //whitespace consumed, failed to find comma, must be ]
-          offsets.put(((buffer.position() - lastOffset) << TYPE_BITS) + ARRAY_END);
           peek = buffer.get();
           assert peek == ']' : Character.getName(peek);
           consumeWhitespace(buffer);
@@ -147,14 +134,21 @@ public class ByteSplittable implements Splittable {
 
     private void collectValue() {
       final int position = (buffer.position() - offset) << TYPE_BITS;
+      int lastOffset, lastPosition;
       switch (buffer.get()) {
         case '{':
           offsets.put(position + OBJECT_START);
+          lastPosition = offsets.position();
+          offsets.put(0);
           collectPairs();
+          offsets.put(lastPosition, offsets.position());
           return;
         case '[':
           offsets.put(position + ARRAY_START);
+          lastPosition = offsets.position();
+          offsets.put(0);
           collectItems();
+          offsets.put(lastPosition, offsets.position());
           return;
         case '"':
           offsets.put(position + STRING);
@@ -365,7 +359,7 @@ public class ByteSplittable implements Splittable {
   public double asNumber() {
 //    ByteBuffer copy = buffer.duplicate();
     int start = getFirstIndex();
-    buffer.position(start + 1);//assume already consumed the first one
+    buffer.position(start + 1);//consumeNumber assumes already consumed the first one
     consumeNumber(buffer);
     int end = buffer.position();
 
@@ -411,35 +405,28 @@ public class ByteSplittable implements Splittable {
 
   @Override
   public Splittable get(int index) {
-    int depth = 0;
+    //skip end index
+    offsets.get();
     int i = 0;
     while (offsets.hasRemaining()) {
       int next = offsets.get();
-      //check if we are ending the previous object, and adjust depth
+      int endOfCurrent = -1;
       if (!isPrimitive(next)) {
-        if (isEnd(next)) {
-          depth--;
-          if (depth < 0) {
-            offsets.reset();
-            return null;
-          }
-          continue;
-        }
+        endOfCurrent = offsets.get(offsets.position());
       }
-      //if we're at depth 0, see if we've got the right index
-      if (depth == 0) {
-        if (i == index) {
-          break;
-        }
-        i++;
+      if (i == index) {
+        //we've found the right index
+        break;
       }
-      //finally, if we are the start to a new layer, increase depth
-      if (!isPrimitive(next) && !isEnd(next)) {
-        // if we are the start to a new layer, increase depth
-        depth++;
+      i++;
+
+      if (!isPrimitive(next)) {
+        //if we just finished a non-primitive, fast forward ahead to the end of that
+        offsets.position(endOfCurrent);
       }
     }
     IntBuffer newOffsets = offsets.duplicate();
+    // if we're looking at a parent, consume one more to skip the end position
     newOffsets.position(offsets.position());
     newOffsets.mark();
 
@@ -454,30 +441,25 @@ public class ByteSplittable implements Splittable {
 
   @Override
   public Splittable get(String key) {
-    int depth = 0;
-    int i = 0;
+    //skip end index
+    offsets.get();
     while (offsets.hasRemaining()) {
-      int next = offsets.get();
-      if (!isPrimitive(next)) {
-        if (isEnd(next)) {
-          depth++;
-        } else if (isEnd(next)) {
-          depth--;
-          continue;
-        }
+      int keyOffset = offsets.get();
+      int endOfCurrent = -1;
+      if (!isPrimitive(keyOffset)) {
+        endOfCurrent = offsets.get(offsets.position());
       }
-      if (depth == 0) {
 
-        //even numbered entries are keys
-        if (i % 2 == 0 && isString(next) && matches(buffer, (next >> TYPE_BITS) + buffer.position() + 1, key, true)) {
-          //advance one more to the value
-          offsets.get();
-          break;
-        }
-        i++;
-      } else if (depth < 1) {
-        offsets.reset();
-        return null;
+      //even numbered entries are keys
+      if (isString(keyOffset) && matches(buffer, (keyOffset >> TYPE_BITS) + buffer.position() + 1, key, true)) {
+        //advance one more to the value
+        offsets.get();
+        break;
+      }
+
+      if (!isPrimitive(keyOffset)) {
+        //if we just finished a non-primitive, fast forward ahead to the end of that
+        offsets.position(endOfCurrent);
       }
     }
     IntBuffer newOffsets = offsets.duplicate();
