@@ -21,7 +21,7 @@ public class ByteSplittable implements Splittable {
   private static final int NUMBER = 0x2;
   private static final int BOOLEAN = 0x3;
 
-  private static final int OBJECT_START = PARENT + 0x0;//with OBJ_MASK checks if is object
+  private static final int OBJECT_START = PARENT;//with OBJ_MASK checks if is object
   private static final int OBJECT_END = PARENT + END_MASK;
   private static final int ARRAY_START = PARENT + 0x2;//with OBJ_MASK checks if is array
   private static final int ARRAY_END = PARENT + 0x2 + END_MASK;
@@ -234,12 +234,9 @@ public class ByteSplittable implements Splittable {
               }
             default:
               throw new IllegalStateException("Illegal escape: \\" + Character.getName(next));
-
           }
       }
     }
-    throw new IllegalStateException("can't end mid-string");
-
   }
 
   private static void consume(ByteBuffer buffer, String remaining) {
