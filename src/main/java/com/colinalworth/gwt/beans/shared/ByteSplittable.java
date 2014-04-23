@@ -14,7 +14,7 @@ public class ByteSplittable implements Splittable {
   private static final int TYPE_BITS = 3;
   private static final int MASK = 0x7;
   private static final int PARENT = 0x4;//also mask for primitive vs parent
-  private static final int END_MASK = 0x1;
+//  private static final int END_MASK = 0x1;
 
   private static final int NULL = 0x0;
   private static final int STRING = 0x1;
@@ -22,9 +22,9 @@ public class ByteSplittable implements Splittable {
   private static final int BOOLEAN = 0x3;
 
   private static final int OBJECT_START = PARENT + 0x0;//with OBJ_MASK checks if is object
-  private static final int OBJECT_END = PARENT + END_MASK;
+//  private static final int OBJECT_END = PARENT + END_MASK;
   private static final int ARRAY_START = PARENT + 0x2;//with OBJ_MASK checks if is array
-  private static final int ARRAY_END = PARENT + 0x2 + END_MASK;
+//  private static final int ARRAY_END = PARENT + 0x2 + END_MASK;
 
 
   private static boolean isPrimitive(int offset) {
@@ -74,7 +74,6 @@ public class ByteSplittable implements Splittable {
     }
 
     private void collectPairs() {
-      final int lastOffset = offset;
       final int initialOffset = buffer.position() - 1;
       consumeWhitespace(buffer);
       peek = buffer.get(buffer.position());
@@ -406,73 +405,74 @@ public class ByteSplittable implements Splittable {
   @Override
   public Splittable get(int index) {
     //skip end index
-    offsets.get();
+    int endIndex = offsets.get();
+    assert endIndex <= offsets.limit();
     int i = 0;
-    while (offsets.hasRemaining()) {
+    while (offsets.hasRemaining() && offsets.position() < endIndex) {
       int next = offsets.get();
-      int endOfCurrent = -1;
-      if (!isPrimitive(next)) {
-        endOfCurrent = offsets.get(offsets.position());
-      }
       if (i == index) {
         //we've found the right index
-        break;
+        IntBuffer newOffsets = offsets.duplicate();
+        // if we're looking at a parent, consume one more to skip the end position
+        newOffsets.position(offsets.position());
+        newOffsets.mark();
+
+        ByteBuffer newBuffer = buffer.duplicate();
+        newBuffer.position(buffer.position() + (offsets.get(offsets.position() - 1) >> TYPE_BITS));
+        newBuffer.mark();
+
+        offsets.reset();
+        buffer.reset();
+        return new ByteSplittable(newBuffer, newOffsets);
       }
       i++;
 
       if (!isPrimitive(next)) {
-        //if we just finished a non-primitive, fast forward ahead to the end of that
-        offsets.position(endOfCurrent);
+        //if we just finished a nsizeon-primitive, fast forward ahead to the end of that
+        offsets.position(offsets.get());
       }
     }
-    IntBuffer newOffsets = offsets.duplicate();
-    // if we're looking at a parent, consume one more to skip the end position
-    newOffsets.position(offsets.position());
-    newOffsets.mark();
-
-    ByteBuffer newBuffer = buffer.duplicate();
-    newBuffer.position(buffer.position() + (offsets.get(offsets.position() - 1) >> TYPE_BITS));
-    newBuffer.mark();
 
     offsets.reset();
-    buffer.reset();
-    return new ByteSplittable(newBuffer, newOffsets);
+    return null;
   }
 
   @Override
   public Splittable get(String key) {
     //skip end index
-    offsets.get();
-    while (offsets.hasRemaining()) {
+    int endIndex = offsets.get();
+    assert endIndex <= offsets.limit();
+    while (offsets.hasRemaining() && offsets.position() < endIndex) {
       int keyOffset = offsets.get();
-      int endOfCurrent = -1;
-      if (!isPrimitive(keyOffset)) {
-        endOfCurrent = offsets.get(offsets.position());
-      }
+      assert isString(keyOffset) : Integer.toHexString(keyOffset & MASK);
 
       //even numbered entries are keys
       if (isString(keyOffset) && matches(buffer, (keyOffset >> TYPE_BITS) + buffer.position() + 1, key, true)) {
         //advance one more to the value
         offsets.get();
-        break;
+        IntBuffer newOffsets = offsets.duplicate();
+        newOffsets.position(offsets.position());
+        newOffsets.mark();
+
+        ByteBuffer newBuffer = buffer.duplicate();
+        newBuffer.position(buffer.position() + (offsets.get(offsets.position() - 1) >> TYPE_BITS));
+        newBuffer.mark();
+
+        offsets.reset();
+        buffer.reset();
+        return new ByteSplittable(newBuffer, newOffsets);
       }
 
-      if (!isPrimitive(keyOffset)) {
+      //move to the value that we are ignoring, and if an object/array, skip to the end
+      int valueOffset = offsets.get();
+      if (!isPrimitive(valueOffset)) {
         //if we just finished a non-primitive, fast forward ahead to the end of that
-        offsets.position(endOfCurrent);
+        offsets.position(offsets.get());
       }
     }
-    IntBuffer newOffsets = offsets.duplicate();
-    newOffsets.position(offsets.position());
-    newOffsets.mark();
-
-    ByteBuffer newBuffer = buffer.duplicate();
-    newBuffer.position(buffer.position() + (offsets.get(offsets.position() - 1) >> TYPE_BITS));
-    newBuffer.mark();
 
     offsets.reset();
-    buffer.reset();
-    return new ByteSplittable(newBuffer, newOffsets);
+    return null;
   }
 
   private boolean matches(ByteBuffer buffer, int index, String target, boolean endsWithQuote) {

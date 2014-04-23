@@ -82,4 +82,14 @@ public class ByteSplittableTest {
     assert split.get("obj").get("a").get(3).asBoolean() == true;
     assert split.get("obj").get("a").get(4).get("foo").asNumber() == 2;
   }
+
+  @Test
+  public void testFindMissingKeys() {
+    ByteBuffer json1 = ByteBuffer.wrap("{\"obj\":{\"a\":[{}, 1, \"abc\", true, {\"foo\":2}]}}".getBytes());
+    ByteSplittable split = new ByteSplittable(json1);
+
+    assert split.get("foo") == null;
+    assert split.get("obj").get("asdf") == null;
+    assert split.get("obj").get("a").get(0).get("asdf") == null;
+  }
 }
