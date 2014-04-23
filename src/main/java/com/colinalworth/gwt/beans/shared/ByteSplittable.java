@@ -411,6 +411,10 @@ public class ByteSplittable implements Splittable {
     while (offsets.hasRemaining() && offsets.position() < endIndex) {
       int next = offsets.get();
       if (i == index) {
+        if ((next & MASK) == NULL) {
+          offsets.reset();
+          return null;
+        }
         //we've found the right index
         IntBuffer newOffsets = offsets.duplicate();
         // if we're looking at a parent, consume one more to skip the end position
@@ -428,7 +432,7 @@ public class ByteSplittable implements Splittable {
       i++;
 
       if (!isPrimitive(next)) {
-        //if we just finished a nsizeon-primitive, fast forward ahead to the end of that
+        //if we just finished a non-primitive, fast forward ahead to the end of that
         offsets.position(offsets.get());
       }
     }
@@ -449,7 +453,11 @@ public class ByteSplittable implements Splittable {
       //even numbered entries are keys
       if (isString(keyOffset) && matches(buffer, (keyOffset >> TYPE_BITS) + buffer.position() + 1, key, true)) {
         //advance one more to the value
-        offsets.get();
+        int value = offsets.get();
+        if ((value & MASK) == NULL) {
+          offsets.reset();
+          return null;
+        }
         IntBuffer newOffsets = offsets.duplicate();
         newOffsets.position(offsets.position());
         newOffsets.mark();
