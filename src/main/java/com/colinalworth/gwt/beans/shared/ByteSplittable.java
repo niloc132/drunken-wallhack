@@ -5,7 +5,6 @@ import com.google.web.bindery.autobean.shared.Splittable;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -214,28 +213,28 @@ public class ByteSplittable implements Splittable {
 //            throw new IllegalStateException("can't end mid-string in an escape sequence");
 //          }
           byte next = buffer.get();
-          switch (next) {
-            case '"':
-            case '\\':
-            case '/':
-            case 'b':
-            case 'f':
-            case 'n':
-            case 'r':
-            case 't':
-              continue;
-            case 'u':
-              byte[] next4 = new byte[4];
-              buffer.get(next4);
-              for (int i = 0; i < next4.length; i++) {
-                if (!(next4[i] >= '0' && next4[i] <= '9') &&
-                        !(next4[i] >='a' && next4[i] <= 'f'))
-                  throw new IllegalStateException("Illegal unicode: " + Arrays.toString(next4));
-              }
-            default:
-              throw new IllegalStateException("Illegal escape: \\" + Character.getName(next));
-
-          }
+//          switch (next) {
+//            case '"':
+//            case '\\':
+//            case '/':
+//            case 'b':
+//            case 'f':
+//            case 'n':
+//            case 'r':
+//            case 't':
+//              continue;
+//            case 'u':
+//              byte[] next4 = new byte[4];
+//              buffer.get(next4);
+//              for (int i = 0; i < next4.length; i++) {
+//                if (!(next4[i] >= '0' && next4[i] <= '9') &&
+//                        !(next4[i] >='a' && next4[i] <= 'f'))
+//                  throw new IllegalStateException("Illegal unicode: " + Arrays.toString(next4));
+//              }
+//            default:
+//              throw new IllegalStateException("Illegal escape: \\" + Character.getName(next));
+//
+//          }
       }
     }
     throw new IllegalStateException("can't end mid-string");
