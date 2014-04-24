@@ -1,7 +1,14 @@
-package com.colinalworth.gwt.beans.shared;
+package com.colinalworth.gwt.beans.vm;
 
+import com.colinalworth.gwt.beans.shared.ByteSplittable;
+import com.colinalworth.gwt.beans.shared.Results;
+import com.colinalworth.gwt.beans.shared.ResultsBean;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.google.web.bindery.autobean.shared.AutoBeanCodex;
+import com.google.web.bindery.autobean.vm.AutoBeanFactorySource;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -97,12 +104,72 @@ public class ThruputTest {
 
       System.out.println("ByteBufferSplittable on " + path);
       System.out.println(bytes[0] + " bytes in " + (time[0] / 1000.0) + " seconds, " + bytes[0] / time[0] * 1000.0 / 1024.0 / 1024.0 + "mb/second");
+      System.out.println();
+    }
+
+  }
+
+  public void warmupBBAutoBean() throws Exception {
+    long start = System.currentTimeMillis();
+    final Results.ABF abf = AutoBeanFactorySource.create(Results.ABF.class);
+    while (start + 1000 * WARMUP_SECONDS > System.currentTimeMillis()) {
+      final List<String> guids = new ArrayList<>(4 * 5 * 20);
+      for (Path path : files) {
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
+            ByteSplittable splittable = new ByteSplittable(bb);
+            Results results = AutoBeanCodex.decode(abf, Results.class, splittable).as();
+            if (readGuids) {
+              guids.add(results.getGuid());
+            }
+
+            return FileVisitResult.CONTINUE;
+          }
+        });
+      }
+    }
+  }
+
+  @Test
+  public void testBBAutoBean() throws Exception {
+    warmupBBAutoBean();
+
+    final Results.ABF abf = AutoBeanFactorySource.create(Results.ABF.class);
+    for (Path path : files) {
+      final double[] bytes = {0};
+      final double[] time = {0};
+      final List<String> guids = new ArrayList<>();
+      while (time[0] < 1000) {
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            ByteBuffer bb = ByteBuffer.wrap(Files.readAllBytes(file));
+            bytes[0] += bb.limit();
+            long start = System.currentTimeMillis();
+            ByteSplittable splittable = new ByteSplittable(bb);
+            Results results = AutoBeanCodex.decode(abf, Results.class, splittable).as();
+            if (readGuids) {
+              guids.add(results.getGuid());
+              guids.add(splittable.get("items").get(4).get("guid").asString());
+            }
+            time[0] += System.currentTimeMillis() - start;
+
+            return FileVisitResult.CONTINUE;
+          }
+        });
+      }
+
+      System.out.println("ByteBuffer AutoBean on " + path);
+      System.out.println(bytes[0] + " bytes in " + (time[0] / 1000.0) + " seconds, " + bytes[0] / time[0] * 1000.0 / 1024.0 / 1024.0 + "mb/second");
+      System.out.println();
     }
 
   }
 
 
-  public void warmupGson() throws IOException {
+  public void warmupGsonRaw() throws IOException {
     final JsonParser gson = new JsonParser();
     long start = System.currentTimeMillis();
     while (start + 1000 * WARMUP_SECONDS > System.currentTimeMillis()) {
@@ -123,8 +190,8 @@ public class ThruputTest {
     }
   }
   @Test
-  public void testGson() throws IOException {
-    warmupGson();
+  public void testGsonRaw() throws IOException {
+    warmupGsonRaw();
     final JsonParser gson = new JsonParser();
 
     for (Path path : files) {
@@ -152,7 +219,62 @@ public class ThruputTest {
 
       System.out.println("Gson's JsonParser on " + path);
       System.out.println(bytes[0] + " bytes in " + (time[0] / 1000.0) + " seconds, " + bytes[0] / time[0] * 1000.0 / 1024.0 / 1024.0 + "mb/second");
+      System.out.println();
     }
+  }
 
+  public void warmupGsonBean() throws IOException {
+    final Gson gson = new GsonBuilder().create();
+    long start = System.currentTimeMillis();
+    while (start + 1000 * WARMUP_SECONDS > System.currentTimeMillis()) {
+      final List<String> guids = new ArrayList<>(4 * 5 * 20);
+      for (Path path : files) {
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            String json = new String(Files.readAllBytes(file));
+            ResultsBean results = gson.fromJson(json, ResultsBean.class);
+            if (readGuids) {
+              guids.add(results.getGuid());
+            }
+            return FileVisitResult.CONTINUE;
+          }
+        });
+      }
+    }
+  }
+
+  @Test
+  public void testGsonBean() throws IOException {
+    warmupGsonBean();
+    final Gson gson = new GsonBuilder().create();
+
+    for (Path path : files) {
+      final double[] bytes = {0};
+      final double[] time = {0};
+      final List<String> guids = new ArrayList<>();
+      while (time[0] < 1000) {
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            byte[] ba = Files.readAllBytes(file);
+            bytes[0] += ba.length;
+            String json = new String(ba);
+            long start = System.currentTimeMillis();
+            ResultsBean results = gson.fromJson(json, ResultsBean.class);
+            if (readGuids) {
+              guids.add(results.getGuid());
+              guids.add(results.getItems().get(4).getGuid());
+            }
+            time[0] += System.currentTimeMillis() - start;
+            return FileVisitResult.CONTINUE;
+          }
+        });
+      }
+
+      System.out.println("Gson.fromJson to bean on " + path);
+      System.out.println(bytes[0] + " bytes in " + (time[0] / 1000.0) + " seconds, " + bytes[0] / time[0] * 1000.0 / 1024.0 / 1024.0 + "mb/second");
+      System.out.println();
+    }
   }
 }

@@ -1,5 +1,6 @@
-package com.colinalworth.gwt.beans.shared;
+package com.colinalworth.gwt.beans.vm;
 
+import com.colinalworth.gwt.beans.shared.ByteSplittable;
 import com.google.web.bindery.autobean.shared.Splittable;
 
 import org.junit.Test;
