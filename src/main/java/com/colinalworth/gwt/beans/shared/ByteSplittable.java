@@ -4,6 +4,7 @@ import com.google.web.bindery.autobean.shared.Splittable;
 
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -68,9 +69,9 @@ public class ByteSplittable implements Splittable {
 
       collectValue();
 
-      buffer.rewind();
       offsets.flip();
       offsets.get();
+      buffer.position(offsets.get(0) >> TYPE_BITS);
     }
 
     private void collectPairs() {
@@ -451,7 +452,7 @@ public class ByteSplittable implements Splittable {
       assert isString(keyOffset) : Integer.toHexString(keyOffset & MASK);
 
       //even numbered entries are keys
-      if (isString(keyOffset) && matches(buffer, (keyOffset >> TYPE_BITS) + buffer.position() + 1, key, true)) {
+      if (matches(buffer, (keyOffset >> TYPE_BITS) + buffer.position() + 1, key, true)) {
         //advance one more to the value
         int value = offsets.get();
         if ((value & MASK) == NULL) {
@@ -508,7 +509,40 @@ public class ByteSplittable implements Splittable {
 
   @Override
   public List<String> getPropertyKeys() {
-    return null;  //To change body of implemented methods use File | Settings | File Templates.
+    assert isKeyed() : "getPropertyKeys() not supported for non-objects";
+    List<String> keys = new ArrayList<>();
+    int start = getFirstIndex();
+
+    //skip end index
+    int endIndex = offsets.get();
+    assert endIndex <= offsets.limit();
+    while (offsets.hasRemaining() && offsets.position() < endIndex) {
+      int keyOffset = offsets.get();
+      assert isString(keyOffset) : Integer.toHexString(keyOffset & MASK);
+
+      int offset = start + (keyOffset >> TYPE_BITS);
+      buffer.position(offset + 2);//consume assumes we already consumed the open quote
+      consumeString(buffer);
+      int end = buffer.position() - 2;//ignore both quotes
+
+      byte[] bytes = new byte[end - offset];
+      buffer.position(offset + 1);//ignore leading quote
+      buffer.get(bytes);
+      keys.add(new String(bytes));
+
+      //skip value
+      int valueOffset = offsets.get();
+      if (!isPrimitive(valueOffset)) {
+        //if we just finished a non-primitive, fast forward ahead to the end of that
+        offsets.position(offsets.get());
+      }
+    }
+
+    //consume moves the marker, move it back and position back to 0
+    buffer.position(start).mark();
+    //TODO consider caching this until we support writing
+    offsets.reset();
+    return keys;
   }
 
   @Override
@@ -558,7 +592,7 @@ public class ByteSplittable implements Splittable {
 
   @Override
   public boolean isUndefined(String key) {
-    return false;
+    return isNull(key);
   }
 
   @Override
@@ -573,7 +607,23 @@ public class ByteSplittable implements Splittable {
 
   @Override
   public int size() {
-    return 0;  //To change body of implemented methods use File | Settings | File Templates.
+    assert isIndexed() : "size() not supported for non-arrays";
+    int size = 0;
+    int endIndex = offsets.get();
+
+    while (offsets.position() < endIndex) {
+      size++;
+      int next = offsets.get();
+
+      if (!isPrimitive(next)) {
+        //if we just finished a non-primitive, fast forward ahead to the end of that
+        offsets.position(offsets.get());
+      }
+    }
+
+    offsets.reset();
+    //TODO cache this value, until we support writing
+    return size;
   }
 
 
