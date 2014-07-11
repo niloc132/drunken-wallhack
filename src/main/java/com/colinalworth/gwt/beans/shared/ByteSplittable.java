@@ -98,13 +98,13 @@ public class ByteSplittable implements Splittable {
             //either comma or }
             if (!consumeWhitespaceAndOptionalComma(buffer)) {
               peek = buffer.get();
-              assert peek == '}' : Character.getName(peek);
+              assert peek == '}';// : Character.getName(peek);
               consumeWhitespace(buffer);
               return;
             }
             break;
           default:
-            assert false : "invalid token " + Character.getName(peek);
+            assert false;// : "invalid token " + Character.getName(peek);
         }
       }
     }
@@ -124,7 +124,7 @@ public class ByteSplittable implements Splittable {
         if (!consumeWhitespaceAndOptionalComma(buffer)) {
           //whitespace consumed, failed to find comma, must be ]
           peek = buffer.get();
-          assert peek == ']' : Character.getName(peek);
+          assert peek == ']';// : Character.getName(peek);
           consumeWhitespace(buffer);
           return;
         }
@@ -180,7 +180,7 @@ public class ByteSplittable implements Splittable {
           consumeNumber(buffer);
           break;
         default:
-          assert false : "Unexpected " + Character.getName(buffer.get(buffer.position() - 1));
+          assert false;// : "Unexpected " + Character.getName(buffer.get(buffer.position() - 1));
       }
       consumeWhitespace(buffer);
     }
@@ -197,11 +197,11 @@ public class ByteSplittable implements Splittable {
   private static void consumeWhitespace(ByteBuffer buffer) {
     do {
       buffer.mark();
-    } while (buffer.hasRemaining() && Character.isWhitespace(buffer.get()));
+    } while (buffer.hasRemaining() && isWhitespace(buffer.get()));
     buffer.reset();
   }
 
-  private static void consumeString(ByteBuffer buffer) {
+  public static void consumeString(ByteBuffer buffer) {
     //TODO unicode wat?
     while (buffer.hasRemaining()) {
       byte current = buffer.get();
@@ -241,7 +241,7 @@ public class ByteSplittable implements Splittable {
 
   }
 
-  private static void consume(ByteBuffer buffer, String remaining) {
+  public static void consume(ByteBuffer buffer, String remaining) {
     buffer.mark();
     int offset = 0;
     while (buffer.hasRemaining() && offset < remaining.length()) {
@@ -253,11 +253,11 @@ public class ByteSplittable implements Splittable {
     }
   }
 
-  private static void consumeNumber(ByteBuffer buffer) {
+  public static void consumeNumber(ByteBuffer buffer) {
     buffer.mark();
     byte next = buffer.get(buffer.position() - 1);//zeroth digit, 0-9 or -
     if (next == '-') {
-      if (!buffer.hasRemaining() || !Character.isDigit(next = buffer.get())) {
+      if (!buffer.hasRemaining() || !Character.isDigit((char)(next = buffer.get()))) {
         throw new IllegalStateException("'-' is not a legal number");
       }
       //next has been advanced, and is 0-9, we're legal, mark it
@@ -270,7 +270,7 @@ public class ByteSplittable implements Splittable {
 //        return;
 //      }
       //going into this loop next is 1-9
-      while (buffer.hasRemaining() && Character.isDigit(next)) {
+      while (buffer.hasRemaining() && Character.isDigit((char)next)) {
         buffer.mark();
         next = buffer.get();
       }
@@ -282,11 +282,11 @@ public class ByteSplittable implements Splittable {
     if (next == '.') {
 //      buffer.mark();//not a legal stopping point, no mark
       next = buffer.get();
-      if (!Character.isDigit(next)) {
+      if (!Character.isDigit((char)next)) {
         //blow up, the '.' must be followed by a digit
         throw new IllegalStateException("'.' must be followed by a digit");
       }
-      while (Character.isDigit(next)) {
+      while (Character.isDigit((char)next)) {
         buffer.mark();
         next = buffer.get();
       }
@@ -297,12 +297,12 @@ public class ByteSplittable implements Splittable {
       if (next == '+' || next == '-') {
         next = buffer.get();
       }
-      if (!Character.isDigit(next)) {
+      if (!Character.isDigit((char)next)) {
         //blow up, (e|E)(+|-|) must be followed by a digit
         throw new IllegalStateException("'e' must be followed by a digit");
       }
 
-      while (Character.isDigit(next)) {
+      while (Character.isDigit((char)next)) {
         buffer.mark();
         next = buffer.get();
       }
@@ -632,6 +632,10 @@ public class ByteSplittable implements Splittable {
 
   private int getFirstTypeDetails() {
     return offsets.get(offsets.position() - 1);
+  }
+
+  private static boolean isWhitespace(byte possibleWhitespace) {
+    return possibleWhitespace == ' ' || possibleWhitespace == '\t' || possibleWhitespace == '\r' || possibleWhitespace == '\n';
   }
 
 }

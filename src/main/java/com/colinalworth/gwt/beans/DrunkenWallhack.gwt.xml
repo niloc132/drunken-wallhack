@@ -1,0 +1,9 @@
+<module>
+  <inherits name="com.google.gwt.user.User" />
+  <inherits name="com.google.gwt.typedarrays.TypedArrays" />
+  <inherits name="com.google.web.bindery.autobean.AutoBean" />
+  <inherits name="playn.PlayN" />
+
+  <source path="client" />
+  <source path="shared" />
+</module>
