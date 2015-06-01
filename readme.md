@@ -1,7 +1,7 @@
 
 forked from niloc132/drunken-wallhack
 
-GWT AutoBean splittable interface and teach it how to read JSON from
+GWT AutoBean splittable interface  to read JSON from
 a ByteBuffer. Parses the structure of the JSON in a single pass, so you can access a few properties and move on.
 
 ByteSplittable:
